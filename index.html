@@ -393,6 +393,8 @@
   .score-input::-webkit-inner-spin-button, .score-input::-webkit-outer-spin-button{ -webkit-appearance:none; margin:0; }
   .score-input:focus{ outline:2px solid var(--court); outline-offset:1px; }
   .game-winner-note:empty{ display:none; }
+  .game-winner-note.bad{ color:var(--danger) !important; }
+  .score-summary.bad{ color:var(--danger); font-weight:700; }
   .score-summary.won{ font-size:13px; color:var(--court); font-weight:700; }
 
   @media (max-width:520px){
@@ -682,6 +684,22 @@ const ScoreRules = {
     let a=0,b=0;
     for(const ev of log||[]){ if(ev==='a') a++; else if(ev==='b') b++; }
     return {a,b};
+  },
+  /* A finished-looking game whose score couldn't happen under the rules (e.g.
+     25-21 when a game ends at 21 or 2 clear): returns a short reason, else null.
+     Unfinished scores (e.g. 18-15, 22-21) are fine: they're saved as in progress. */
+  gameProblem(g, cfg){
+    cfg = cfg || DEFAULT_SCORING;
+    const a=g.a|0, b=g.b|0, hi=Math.max(a,b), lo=Math.min(a,b), P=cfg.pointsToWin||21;
+    if(!cfg.deuceEnabled){
+      return hi>P ? 'the game ends as soon as a side reaches '+P : null;
+    }
+    const cap=cfg.capPoints||30, by=cfg.winBy||2;
+    if(hi>cap) return 'the game ends at '+cap+' at the latest';
+    if(hi<=P) return null;                               // not past the target yet
+    if(hi===cap) return (lo===cap-1 || (hi-lo===by && lo>=P-by+1)) ? null : 'the game would have ended earlier';
+    if(hi-lo<by) return null;                            // still in deuce, unfinished
+    return (hi-lo===by && lo>=P-by+1) ? null : 'the game would have ended earlier';
   },
   validGameScore(g, cfg){
     cfg = cfg || DEFAULT_SCORING;
@@ -2066,6 +2084,11 @@ function matchEntryPlayerIds(m){
   return [...entryPlayerIds(entryById(m.entry1Id)), ...entryPlayerIds(entryById(m.entry2Id))];
 }
 function scoringFor(event, tournament){
+  if(event && event.drawFormat==='americano'){
+    // Americano is always one game per match; without its own rule it uses badminton scoring.
+    const sc = event.scoringOverride;
+    return sc ? Object.assign({}, sc, {bestOf:1}) : AMERICANO_DEFAULT_SCORING;
+  }
   return (event && event.scoringOverride) || (tournament && tournament.scoring) || DEFAULT_SCORING;
 }
 
@@ -3530,7 +3553,7 @@ function renderEventDetailAdmin(t, ev){
         </select></div>
         <div class="field" id="fGroupSizeWrap" ${ev.drawFormat!=='group_knockout'?'hidden':''}><label>Group size</label><input type="number" id="fGroupSize" min="3" max="6" value="${(draw&&draw.groupSize)||4}"></div>
       </div>
-      ${ev.drawFormat==='americano'?`<div class="helptext" style="margin-bottom:8px">Americano variant: <b>${esc((ev.americanoVariant||'classic').replace(/^./,c=>c.toUpperCase()))}</b>${ev.scoringOverride?' &middot; race to '+ev.scoringOverride.pointsToWin+' points':''} - change it from Edit event.</div>`:''}
+      ${ev.drawFormat==='americano'?`<div class="helptext" style="margin-bottom:8px">Americano variant: <b>${esc((ev.americanoVariant||'classic').replace(/^./,c=>c.toUpperCase()))}</b> &middot; ${esc(describeScoring(scoringFor(ev, t)))} - change it from Edit event.</div>`:''}
       ${ev.drawFormat==='americano' && (ev.americanoVariant||'classic')==='classic' ? (()=>{
         const nPlayers = entries.length || regs.filter(r=>r.status==='confirmed').length;
         return nPlayers ? `<div class="helptext" style="margin-bottom:8px">${esc(americanoPlanSummary(nPlayers))}</div>` : '';
@@ -4353,16 +4376,30 @@ function openTournamentDialog(existing){
 }
 
 /* ---------- DIALOG: EVENT ---------- */
-const AMERICANO_POINT_PRESETS = [16,21,24,32];
-function americanoScoringFromPoints(points){
-  return { bestOf:1, pointsToWin:points, winBy:1, capPoints:points, deuceEnabled:false };
+/* Americano games follow badminton scoring by default: one game to 21, a side
+   must win by 2, and 30 is the hard stop (30-29 wins). Shorter games use the
+   usual caps (11 -> 15, 15 -> 21). "No deuce" is a straight race to the target. */
+const AMERICANO_POINT_PRESETS = [21, 15, 11];
+const AMERICANO_CAPS = {11:15, 15:21, 21:30};
+function americanoCap(points){ return AMERICANO_CAPS[points] || (points + 9); }
+function americanoScoringFromPoints(points, deuce){
+  points = points || 21;
+  if(deuce===false) return { bestOf:1, pointsToWin:points, winBy:1, capPoints:points, deuceEnabled:false };
+  return { bestOf:1, pointsToWin:points, winBy:2, capPoints:americanoCap(points), deuceEnabled:true };
 }
-/* Detects a plain "race to N points, single game" override so the Americano
-   points-preset select can show the right current value (rather than always
-   resetting to the 24-point PadelMix-recommended default). */
+const AMERICANO_DEFAULT_SCORING = americanoScoringFromPoints(21, true);
+/* Reads an Americano event's rules back into the dialog's two controls. */
 function americanoPointsFromScoring(sc){
-  if(sc && sc.bestOf===1 && !sc.deuceEnabled && sc.pointsToWin===sc.capPoints) return sc.pointsToWin;
-  return 24;
+  if(!sc) return {points:21, deuce:true};
+  return {points: sc.pointsToWin || 21, deuce: !!sc.deuceEnabled};
+}
+/* One-line description of a scoring rule, e.g. "1 game to 21, win by 2, 30 max". */
+function describeScoring(cfg){
+  cfg = cfg || DEFAULT_SCORING;
+  const games = (cfg.bestOf||3)===1 ? '1 game' : 'Best of '+cfg.bestOf+' games';
+  return cfg.deuceEnabled
+    ? games+' to '+cfg.pointsToWin+', win by '+(cfg.winBy||2)+', '+(cfg.capPoints||30)+' max'
+    : games+', first to '+cfg.pointsToWin+' points (no deuce)';
 }
 function openEventDialog(tid, existing){
   const ev = existing||{};
@@ -4394,10 +4431,13 @@ function openEventDialog(tid, existing){
         <option value="mexicano" ${amVariant==='mexicano'?'selected':''}>Mexicano - ranked pairing, ties strength to current standings each round</option>
       </select></div>
       <div class="helptext" id="fEAmVariantHint" style="margin:4px 0 8px"></div>
-      <div class="field"><label>Points per match</label><select id="fEAmPoints">
-        ${AMERICANO_POINT_PRESETS.map(p=>`<option value="${p}" ${amPoints===p?'selected':''}>Race to ${p} points${p===24?' (recommended)':''}</option>`).join('')}
+      <div class="field"><label>Points per game</label><select id="fEAmPoints">
+        ${(AMERICANO_POINT_PRESETS.includes(amPoints.points) ? AMERICANO_POINT_PRESETS : AMERICANO_POINT_PRESETS.concat([amPoints.points]))
+          .map(p=>`<option value="${p}" ${amPoints.points===p?'selected':''}>${p} points${p===21?' (standard)':''}</option>`).join('')}
       </select></div>
-      <div class="helptext">One game, straight race to the target - no deuce. Both players on the winning side of a point each earn 1 toward their individual total.</div>
+      <label class="row" style="font-size:12.5px;gap:6px"><input type="checkbox" id="fEAmDeuce" ${amPoints.deuce?'checked':''}> Deuce: win by 2 points</label>
+      <div class="helptext" id="fEAmRule" style="margin-top:6px"></div>
+      <div class="helptext">Each match is one game. Both players on a team earn the points their team scores toward their individual total.</div>
     </div>
     <div class="card" id="fEScoringCard" style="margin-top:12px;padding:12px" ${isAM?'hidden':''}>
       <h3 style="font-family:'Public Sans';font-size:14px;text-transform:none;letter-spacing:0;margin-bottom:8px">Scoring rules</h3>
@@ -4426,6 +4466,16 @@ function openEventDialog(tid, existing){
   };
   function refreshAmVariantHint(){ amVariantHint.textContent = AM_VARIANT_HINTS[document.getElementById('fEAmVariant').value] || ''; }
   refreshAmVariantHint();
+  const amRuleEl = document.getElementById('fEAmRule');
+  function refreshAmRule(){
+    const pts = parseInt(document.getElementById('fEAmPoints').value,10)||21, deuce = document.getElementById('fEAmDeuce').checked;
+    amRuleEl.textContent = deuce
+      ? 'First to '+pts+'. At '+(pts-1)+'-all a side must lead by 2; at '+(americanoCap(pts)-1)+'-all the next point wins ('+americanoCap(pts)+' max).'
+      : 'First to '+pts+' wins, even by one point.';
+  }
+  document.getElementById('fEAmPoints').addEventListener('change', refreshAmRule);
+  document.getElementById('fEAmDeuce').addEventListener('change', refreshAmRule);
+  refreshAmRule();
   const amVariantEl = document.getElementById('fEAmVariant');
   if(amVariantEl) amVariantEl.addEventListener('change', refreshAmVariantHint);
   const formatEl = document.getElementById('fEFormat');
@@ -4446,7 +4496,7 @@ function openEventDialog(tid, existing){
       drawFormat:format, thirdPlaceMatch:document.getElementById('fEThird').checked,
       americanoVariant: format==='americano' ? document.getElementById('fEAmVariant').value : (ev.americanoVariant||'classic'),
       scoringOverride: format==='americano'
-        ? americanoScoringFromPoints(parseInt(document.getElementById('fEAmPoints').value,10)||24)
+        ? americanoScoringFromPoints(parseInt(document.getElementById('fEAmPoints').value,10)||21, document.getElementById('fEAmDeuce').checked)
         : (useCustom ? {
             bestOf: parseInt(document.getElementById('fEBestOf').value,10),
             pointsToWin: parseInt(document.getElementById('fEPointsToWin').value,10)||21,
@@ -4631,6 +4681,8 @@ function openScoreDialog(match){
     const games = dlgScoreDraft.games.map(g=>({a:g.a|0, b:g.b|0})).filter((g,i,arr)=> i===0 || g.a || g.b || arr.slice(i+1).some(x=>x.a||x.b));
     const bad = games.findIndex(g=>!ScoreRules.validGameScore(g, cfg));
     if(bad>=0){ toast('Game '+(bad+1)+': scores can\'t go above '+(cfg.capPoints||30)+' points', true); return; }
+    const odd = games.findIndex(g=>ScoreRules.gameProblem(g, cfg));
+    if(odd>=0){ const g=games[odd]; toast('Game '+(odd+1)+': '+g.a+'-'+g.b+' isn\'t possible, '+ScoreRules.gameProblem(g, cfg)+' ('+describeScoring(cfg)+').', true); return; }
     const winner = ScoreRules.matchWinner(games, cfg);
     const decided = ['completed','walkover','retired'].includes(m.status);
     btn.disabled = true;
@@ -4682,22 +4734,28 @@ function updateScoreSummary(){
   const w1 = dlgScoreDraft.games.filter(g=>ScoreRules.gameWinner(g,cfg)===1).length;
   const w2 = dlgScoreDraft.games.filter(g=>ScoreRules.gameWinner(g,cfg)===2).length;
   const sum = body.querySelector('#scoreSummary');
-  if(sum){
+  const badIdx = dlgScoreDraft.games.findIndex(g=>ScoreRules.gameProblem(g,cfg));
+  if(sum && badIdx>=0){
+    sum.className = 'score-summary bad';
+    sum.textContent = 'Check game '+(badIdx+1)+' · '+describeScoring(cfg);
+  } else if(sum){
     sum.className = winner ? 'score-summary won' : 'score-summary';
     sum.textContent = winner
       ? (winner===1?e1n:e2n)+' wins the match ('+w1+'-'+w2+')'
       : (cfg.bestOf||3)>1
         ? 'Best of '+(cfg.bestOf||3)+' · first to '+need+' games wins · currently '+w1+'-'+w2+' · an unfinished score is saved as in progress'
-        : 'First to '+cfg.pointsToWin+' points wins · an unfinished score is saved as in progress';
+        : describeScoring(cfg)+' · an unfinished score is saved as in progress';
   }
   dlgScoreDraft.games.forEach((g,i)=>{
     const note = body.querySelector('[data-game-note="'+i+'"]'); if(!note) return;
     const w = ScoreRules.gameWinner(g,cfg);
-    note.textContent = w ? (w===1?e1n:e2n)+' won this game' : '';
+    const problem = ScoreRules.gameProblem(g,cfg);
+    note.classList.toggle('bad', !!problem);
+    note.textContent = problem ? g.a+'-'+g.b+' isn\'t possible: '+problem : w ? (w===1?e1n:e2n)+' won this game' : '';
   });
   const save = document.getElementById('btnSaveCorrect');
   const decided = ['completed','walkover','retired'].includes(m.status);
-  if(save && !decided) save.textContent = winner ? 'Save result' : 'Save score';
+  if(save && !decided) save.textContent = (winner && badIdx<0) ? 'Save result' : 'Save score';
 }
 function renderScoreEditorBody(){
   const m = matchById(dlgScoreDraft.matchId);
