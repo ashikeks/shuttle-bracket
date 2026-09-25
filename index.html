@@ -183,6 +183,27 @@
   .t-header .t-sub{ color:var(--muted); font-size:12.5px; }
   .t-header .t-actions{ display:flex; gap:8px; flex:0 1 auto; min-width:0; flex-wrap:wrap; }
 
+  /* screens reached from the bottom bar need no title: the bar already says where you are */
+  .t-header.page-h > div:first-child{ display:none; }
+  .t-header.page-h{ justify-content:flex-end; }
+  .t-header.page-h:not(:has(.t-actions > *)){ display:none; }
+  .topbar-actions{ display:flex; align-items:center; }
+  .topbar-actions:empty{ display:none; }
+  .topbar-actions .t-actions{ display:flex; gap:8px; flex-wrap:nowrap; }
+  @media (max-width:700px){
+    .topbar{ flex-wrap:nowrap; }
+    .topbar .brand{ min-width:0; }
+    .topbar-group{ margin-left:auto; }
+    .topbar-actions .t-actions{ gap:6px; }
+    .topbar-actions .btn{ width:38px; height:38px; padding:0; justify-content:center; font-size:0; gap:0; border-radius:12px; }
+    .topbar-actions .btn.m-keep{ width:auto; padding:0 11px; font-size:12.5px; gap:4px; white-space:nowrap; }
+    .topbar-actions .btn.m-keep svg{ width:16px; height:16px; }
+    .topbar .brand-name{ font-size:14px; }
+    .topbar .brand-mark{ width:34px; height:34px; }
+    .topbar-spacer{ min-width:0; }
+    .topbar-actions .btn svg{ width:18px; height:18px; }
+  }
+  @media (max-width:389px){ .topbar .brand-name{ display:none; } }
   .back-link{ display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:12.5px; font-weight:600; cursor:pointer; background:none; border:none; padding:4px 0; margin-bottom:8px; }
   .back-link:hover{ color:var(--ink); }
   .back-link svg{ width:14px; height:14px; }
@@ -556,6 +577,20 @@
   .ev-entries[open] > summary::after{ transform:rotate(-90deg); }
   .ev-entries[open] > summary{ margin-bottom:6px; }
   .no-print-gap{ height:6px; }
+  .res-card{ padding:14px; }
+  .res-h{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .res-h h3{ margin:0; font-size:16px; font-family:inherit; text-transform:none; letter-spacing:0; font-weight:800; }
+  .res-table td{ vertical-align:middle; }
+  .res-table .rk{ width:24px; color:var(--muted); }
+  .res-nm{ font-weight:600; }
+  .res-pl{ font-size:11.5px; color:var(--muted); margin-top:1px; }
+  .res-table tr.champ .res-nm{ color:var(--gold); font-weight:800; }
+  .res-table .w{ color:var(--win, var(--court)); font-weight:700; }
+  .res-table .l{ color:var(--muted); }
+  .res-rp{ font-weight:800; }
+  .res-more{ margin:-2px 0 6px auto; display:flex; }
+  .res-foot{ display:flex; justify-content:flex-end; }
+  .res-foot:not(:has(> :not(.m-overflow))){ }
   .sb-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:0 12px; align-items:start; }
   @media (max-width:700px){ .sb-grid{ grid-template-columns:minmax(0,1fr); } }
   .sb.me-match{ border-color:var(--court); }
@@ -1031,7 +1066,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260925.195854';
+const APP_BUILD = '20260925.210002';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3714,7 +3749,7 @@ function renderMoreView(){
   const moreIcons = {reports:'print', settings:'edit', mytournaments:'trophy', rankings:'chart', profile:'user', draws:'list', players:'users', schedule:'calendar', mymatches:'court', results:'list'};
   const players = state.players.slice().sort((a,b)=>a.name.localeCompare(b.name));
   let pref='auto'; try{ pref = localStorage.getItem('sb-theme') || 'auto'; }catch(e){}
-  return `<div class="t-header"><div><h2>More</h2></div></div>
+  return `<div class="t-header page-h"><div><h2>More</h2></div></div>
     ${extra.length?`<div class="more-list">${extra.map(([k,label])=>`<button class="more-item" data-nav="${k}"><span class="more-ic">${ICONS[moreIcons[k]]||ICONS.list}</span><span class="grow">${esc(label)}</span>${ICONS.chevRight}</button>`).join('')}</div>`:''}
     <div class="more-h">Appearance</div>
     <div class="seg">${[['light','Light','sun'],['auto','Automatic','auto'],['dark','Dark','moon']].map(([v,l,ic])=>`<button class="${pref===v?'active':''}" data-theme="${v}">${ICONS[ic]}<span>${l}</span></button>`).join('')}</div>`;
@@ -3801,6 +3836,7 @@ function shellHtml(){
       </div>
       <div class="topbar-spacer"></div>
       <div class="topbar-group">
+        <div class="topbar-actions" id="topbarActions"></div>
         <div class="role-switch" hidden>
         </div>
         <div class="theme-toggle" id="themeToggle">
@@ -3961,7 +3997,7 @@ function renderDashboard(){
   const liveMatches = state.matches.filter(m=>m.status==='in_progress').length;
   const completedMatches = state.matches.filter(m=>['completed','walkover','retired','bye'].includes(m.status)).length;
   return `
-    <div class="t-header"><div><h2>Dashboard</h2><div class="t-sub">Across all tournaments</div></div>
+    <div class="t-header page-h"><div><h2>Dashboard</h2><div class="t-sub">Across all tournaments</div></div>
       <div class="t-actions">${state.role==='admin'?`<button class="btn btn-primary btn-sm m-keep" id="btnNewTournamentHero">${ICONS.plus} New tournament</button>`:''}</div>
     </div>
     <div class="stat-grid">
@@ -4008,7 +4044,7 @@ function renderBrowseTournaments(){
   };
   const section = (title, arr, empty)=> `<div class="section-h"><h3>${title}</h3></div>${arr.length?`<div class="cat-grid">${arr.map(card).join('')}</div>`:`<div class="empty-tab">${empty}</div>`}`;
   return `
-    <div class="t-header"><div><h2>Tournaments</h2><div class="t-sub">${list.length} tournament${list.length===1?'':'s'}</div></div></div>
+    <div class="t-header page-h"><div><h2>Tournaments</h2><div class="t-sub">${list.length} tournament${list.length===1?'':'s'}</div></div></div>
     ${section('Open for registration', open, 'No tournament is taking registrations right now.')}
     ${section('Upcoming and in progress', running, 'Nothing running at the moment.')}
     ${finished.length ? section('Finished', finished, '') : ''}
@@ -4018,7 +4054,7 @@ function renderTournamentsList(){
   if(state.role!=='admin') return renderBrowseTournaments();
   const list = visibleTournaments();
   return `
-    <div class="t-header"><div><h2>Tournaments</h2><div class="t-sub">${list.length} tournament${list.length===1?'':'s'}</div></div>
+    <div class="t-header page-h"><div><h2>Tournaments</h2><div class="t-sub">${list.length} tournament${list.length===1?'':'s'}</div></div>
       ${state.role==='admin'?`<div class="t-actions"><button class="btn btn-primary m-keep" id="btnNewTournamentHero">${ICONS.plus} New tournament</button></div>`:''}
     </div>
     ${list.length ? `<div class="cat-grid">${list.map(renderTournamentCard).join('')}</div>` : `<div class="empty-tab">No tournaments to show yet.</div>`}
@@ -4597,27 +4633,53 @@ function renderCourtsTab(t){
 function renderResultsTab(t){
   const fp = followedPlayer();
   const evs = tEvents(t.id).filter(ev=> !fp || eventEntries(ev.id).some(en=>entryPlayerIds(en).includes(fp.id)));
+  const DONE = ['completed','walkover','retired'];
+  const tm = m=> m.actualEnd || m.updatedAt || m.scheduledStart || '';
+  const ms = tMatches(t.id).filter(m=>m.entry1Id && m.entry2Id && (!fp || matchHasPlayer(m, fp.id)));
+  const live = ms.filter(m=>m.status==='in_progress');
+  const latest = ms.filter(m=>DONE.includes(m.status)).sort((a,b)=>tm(b).localeCompare(tm(a))).slice(0, Math.max(0, 4-live.length));
+  const recent = live.concat(latest);
   return `${followNote()}
     <div class="export-row no-print" data-more-scope><button class="btn btn-sm btn-ghost" data-points-help="1">${ICONS.info} How points work</button><button class="btn btn-sm m-overflow" id="btnExportResultsMain">${ICONS.download} Export all results CSV</button><button class="btn btn-sm m-overflow" id="btnPrintResults">${ICONS.print} Print</button>${moreMenuBtn('Export or print results')}</div>
+    ${recent.length ? `<div class="mt-sec"><h3>Latest scores</h3><div class="sb-grid">${recent.map(m=>renderScoreboard(m,{hideTime:true})).join('')}</div>
+      <button class="btn btn-sm btn-ghost res-more no-print" data-tab="matches">All results &rarr;</button></div>` : ''}
+    <div class="mt-sec"><h3>Standings</h3></div>
     ${evs.map(ev=>renderEventResultsCard(ev)).join('') || `<div class="empty-tab">No events yet.</div>`}
   `;
 }
+/* One table per event: position, wins-losses, rally points won and ranking points
+   (the last only once the event is decided). Placement shows under the name. */
 function renderEventResultsCard(ev){
   const draw = eventDraw(ev.id);
-  if(!draw) return `<div class="card"><h3 style="font-family:'Public Sans';font-size:15px;text-transform:none;letter-spacing:0">${esc(ev.name)}</h3><div class="sub-txt">Draw not generated yet.</div></div>`;
+  const head = (st)=>`<div class="res-h"><h3>${esc(ev.name)}</h3>${st?`<span class="pill ${st==='Final'?'gold':st==='In progress'?'court':''}">${st}</span>`:''}</div>`;
+  if(!draw) return `<div class="card res-card">${head('')}<div class="sub-txt">Draw not generated yet.</div></div>`;
+  const matches = eventMatches(ev.id);
   const placements = computeEventPlacements(ev.id);
-  const ranked = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam).map(e=>({entry:e, ...(placements[e.id]||{points:0,label:'In progress'})}))
-    .sort((a,b)=> (b.points-a.points) || ((a.rank||999)-(b.rank||999)));
-  const podium = ranked.filter(r=>!r.provisional && (['Champion','Runner-up'].includes(r.label) || /^#[123]$/.test(r.label))).slice(0,4);
-  return `<div class="card">
-    <div class="row between wrap"><h3 style="font-family:'Public Sans';font-size:15px;text-transform:none;letter-spacing:0;margin:0">${esc(ev.name)}</h3>
-      <button class="btn btn-sm no-print m-overflow" data-export-standings="${ev.id}">${ICONS.download} Export</button></div>
-    <div class="row wrap" style="margin:8px 0;gap:8px">
-      ${podium.map(r=>`<span class="pill ${r.label==='Champion'?'gold':'court'}">${esc(r.label)}: ${esc(entryName(r.entry))}</span>`).join('') || '<span class="sub-txt">Still in progress.</span>'}
-    </div>
-    <div class="table-scroll"><table class="data-table"><thead><tr><th>Entry</th><th>Placement</th><th class="num">Points</th></tr></thead>
-    <tbody>${ranked.map(r=>`<tr class="${followedPlayer() && entryPlayerIds(r.entry).includes(followedPlayer().id)?'me-row':''}"><td>${esc(entryName(r.entry))}</td><td>${esc(r.label)}</td><td class="num mono">${r.provisional?'&ndash;':r.points}</td></tr>`).join('')}</tbody></table></div>
-    ${ranked.some(r=>r.provisional) ? `<div class="helptext" style="margin-top:6px">Ranking points are awarded when every match in the event has been played.</div>` : ''}
+  const isAm = draw.format==='americano';
+  const entries = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam);
+  const stats = {};
+  if(isAm){
+    computeAmericanoStandings(entries, matches).forEach(r=>{ const en = entries.find(e=>e.player1Id===r.playerId); if(en) stats[en.id] = r; });
+  } else {
+    computeGroupStandings(entries.map(e=>e.id), matches.filter(m=>m.entry1Id && m.entry2Id), TIEBREAK_DEFAULT).forEach(r=>{ stats[r.entryId] = r; });
+  }
+  const rows = entries.map(e=>({entry:e, st:stats[e.id]||{played:0,wins:0,losses:0,pointsFor:0}, ...(placements[e.id]||{points:0,label:'',provisional:true})}))
+    .sort((a,b)=> (b.provisional?0:b.points)-(a.provisional?0:a.points) || ((a.rank||999)-(b.rank||999)) || (b.st.wins-a.st.wins) || (b.st.pointsFor-a.st.pointsFor));
+  const played = matches.some(m=>['completed','walkover','retired'].includes(m.status));
+  const final = played && matches.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status));
+  const st = final ? 'Final' : played ? 'In progress' : 'Not started';
+  const fp = followedPlayer();
+  return `<div class="card res-card">
+    ${head(st)}
+    <div class="table-scroll"><table class="data-table res-table"><thead><tr><th class="rk">#</th><th>${isDoublesType(ev.type)&&!isAm?'Team':'Player'}</th><th class="num">W-L</th><th class="num" title="Rally points won">Pts won</th><th class="num" title="Ranking points">Rank pts</th></tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr class="${fp && entryPlayerIds(r.entry).includes(fp.id)?'me-row':''} ${r.label==='Champion'?'champ':''}">
+      <td class="rk mono">${i+1}</td>
+      <td><div class="res-nm">${esc(entryName(r.entry))}</div>${r.label && r.label!=='Not started'?`<div class="res-pl">${esc(r.label.replace(' (still in)',' · still in'))}</div>`:''}</td>
+      <td class="num mono"><span class="w">${r.st.wins}</span>-<span class="l">${r.st.losses}</span></td>
+      <td class="num mono">${r.st.pointsFor}</td>
+      <td class="num mono res-rp">${r.provisional?'&ndash;':r.points}</td></tr>`).join('')}</tbody></table></div>
+    ${rows.some(r=>r.provisional) ? `<div class="helptext" style="margin-top:6px">Rank points are given once every match in the event is played.</div>` : ''}
+    <div class="res-foot no-print"><button class="btn btn-sm btn-ghost m-overflow" data-export-standings="${ev.id}">${ICONS.download} Export</button></div>
   </div>`;
 }
 
@@ -4887,7 +4949,7 @@ function renderPlayersRegistry(){
   if(f.clubId) list = list.filter(p=>p.clubId===f.clubId);
   list.sort((a,b)=>a.name.localeCompare(b.name));
   return `
-    <div class="t-header"><div><h2>Players</h2><div class="t-sub">${list.length} player${list.length===1?'':'s'}</div></div>
+    <div class="t-header page-h"><div><h2>Players</h2><div class="t-sub">${list.length} player${list.length===1?'':'s'}</div></div>
       ${state.role==='admin'?`<div class="t-actions" data-more-scope><button class="btn btn-sm m-overflow" id="btnExportPlayers">${ICONS.download} Export players CSV</button><button class="btn btn-primary btn-sm m-keep" id="btnNewPlayer">${ICONS.plus} Add player</button>${moreMenuBtn()}</div>`:''}
     </div>
     <div class="filter-bar">
@@ -4916,8 +4978,8 @@ function renderRankingsView(){
   if(f.clubId) stats = stats.filter(s=> (s.player||{}).clubId===f.clubId);
   stats.sort((a,b)=> b.rankingPoints-a.rankingPoints || b.winPct-a.winPct);
   return `
-    <div class="t-header"><div><h2>Rankings</h2><div class="t-sub" title="${esc(RANKING_POINTS_TOOLTIP)}" data-points-help="1" role="button" tabindex="0" style="cursor:pointer">How points work <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></div></div>
-      ${VIEWER?'':`<div class="t-actions"><button class="btn btn-sm" id="btnExportRankings" aria-label="Export rankings CSV" title="Export rankings CSV">${ICONS.download} Export</button></div>`}
+    <div class="t-header page-h"><div><h2>Rankings</h2><div class="t-sub" title="${esc(RANKING_POINTS_TOOLTIP)}" data-points-help="1" role="button" tabindex="0" style="cursor:pointer">How points work <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></div></div>
+      <div class="t-actions"><button class="btn btn-sm" data-points-help="1" title="How points work" aria-label="How points work">${ICONS.info} How points work</button>${VIEWER?'':`<button class="btn btn-sm" id="btnExportRankings" aria-label="Export rankings CSV" title="Export rankings CSV">${ICONS.download} Export</button>`}</div>
     </div>
     <div class="filter-bar">
       <select data-filter="rankings.gender"><option value="">All genders</option><option value="male" ${f.gender==='male'?'selected':''}>Male</option><option value="female" ${f.gender==='female'?'selected':''}>Female</option></select>
@@ -4936,7 +4998,7 @@ function reportTournament(){ return currentTournament() || state.tournaments[0] 
 function renderReportsView(){
   const t = reportTournament();
   return `
-    <div class="t-header"><div><h2>Reports</h2><div class="t-sub">CSV exports and print-ready pages</div></div></div>
+    <div class="t-header page-h"><div><h2>Reports</h2><div class="t-sub">CSV exports and print-ready pages</div></div></div>
     <div class="filter-bar">${state.tournaments.length ? `<select id="fReportTournament">
       ${state.tournaments.map(x=>`<option value="${x.id}" ${t&&t.id===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select>` : `<span class="helptext">Create a tournament to enable the tournament exports.</span>`}</div>
     <div class="section-h"><h3>Tournament-scoped</h3></div>
@@ -4994,7 +5056,7 @@ function renderDataSettingsCard(){
     </div>`;
 }
 function renderSettingsView(){
-  return `<div class="t-header"><div><h2>Settings</h2><div class="t-sub">App settings</div></div></div>
+  return `<div class="t-header page-h"><div><h2>Settings</h2><div class="t-sub">App settings</div></div></div>
     ${renderShareSettingsCard()}
     ${renderDataSettingsCard()}
     <div class="helptext" style="text-align:center;margin:10px 0">A tournament's scoring, courts and rest times are under that tournament &rarr; Settings &rarr; General.</div>`;
@@ -6260,6 +6322,10 @@ document.addEventListener('input', (e)=>{
 
 /* ============================== POST-RENDER HOOKS / THEME ============================== */
 function postRenderHooks(){
+  // The current screen's buttons (New tournament, Add player, Share, ⋯) sit in the top bar next to the logo.
+  const slot = document.getElementById('topbarActions');
+  const acts = !VIEWER && document.querySelector('.main .t-header .t-actions');
+  if(slot && acts){ slot.appendChild(acts); }
   const entBox = document.getElementById('evEntriesBox');
   if(entBox) entBox.addEventListener('toggle', ()=>{ state.entriesOpen = state.entriesOpen||{}; state.entriesOpen[entBox.getAttribute('data-ev')] = entBox.open; });
   const addForm = document.getElementById('tAddPlayerForm');
