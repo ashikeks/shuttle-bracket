@@ -591,6 +591,19 @@
   .res-more{ margin:-2px 0 6px auto; display:flex; }
   .res-foot{ display:flex; justify-content:flex-end; }
   .res-foot:not(:has(> :not(.m-overflow))){ }
+  .champ-banner{ display:flex; align-items:center; gap:10px; background:linear-gradient(135deg, color-mix(in srgb, var(--gold) 18%, var(--surface)), color-mix(in srgb, #f5b400 14%, var(--surface))); border:1px solid color-mix(in srgb, var(--gold) 35%, var(--border)); border-radius:12px; padding:10px 12px; margin:2px 0 10px; font-weight:800; font-size:15px; color:var(--ink); }
+  .champ-banner svg{ width:22px; height:22px; color:var(--gold); flex:none; }
+  .champ-banner small{ display:block; font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--gold); }
+  .champ-banner.sm{ padding:7px 10px; font-size:13.5px; margin:10px 0 0; }
+  .champ-banner.sm svg{ width:18px; height:18px; }
+  .champs-card{ border-radius:16px; padding:14px; margin-bottom:14px; background:linear-gradient(135deg, color-mix(in srgb, var(--gold) 16%, var(--surface)), color-mix(in srgb, var(--court) 10%, var(--surface))); border:1px solid color-mix(in srgb, var(--gold) 30%, var(--border)); }
+  .champs-h{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px; margin-bottom:8px; }
+  .champs-h svg{ width:20px; height:20px; color:var(--gold); }
+  .champs-row{ display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid color-mix(in srgb, var(--gold) 20%, var(--border)); font-size:14px; }
+  .champs-ev{ color:var(--muted); font-weight:600; }
+  .champs-nm{ font-weight:800; text-align:right; }
+  .btn-finish svg{ color:var(--gold); }
+  .finish-hint{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:var(--surface); border:1px dashed var(--border); border-radius:12px; padding:10px 12px; margin-bottom:14px; font-size:13px; font-weight:600; }
   .sb-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:0 12px; align-items:start; }
   @media (max-width:700px){ .sb-grid{ grid-template-columns:minmax(0,1fr); } }
   .sb.me-match{ border-color:var(--court); }
@@ -1066,7 +1079,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260925.210002';
+const APP_BUILD = '20260925.213314';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -2793,6 +2806,11 @@ function standingPlacement(pos, st){
   return {points: standingPoints(pos), label:'#'+pos, rank:pos};
 }
 function computeEventPlacements(eventId){
+  const pl = computeEventPlacementsRaw(eventId);
+  const ev = eventById(eventId);
+  return ev && ev.status==='completed' ? finalizePlacements(ev, pl) : pl;
+}
+function computeEventPlacementsRaw(eventId){
   const matches = eventMatches(eventId);
   const entries = eventEntries(eventId);
   const placements = {};
@@ -2851,10 +2869,12 @@ function computeEventPlacements(eventId){
     const isMex = ev && (ev.americanoVariant||'classic')==='mexicano';
     // With a final, the event is only over once the final is decided (Mexicano included).
     const finalDone = fin && ['completed','walkover','retired'].includes(fin.status) && fin.winnerEntryId;
-    const state_ = fin ? standingsEventState(matches, finalDone && roundMs.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status)) ? null : false)
-                       : standingsEventState(matches, isMex ? ev.status==='completed' : null);
+    const evDone = ev && ev.status==='completed';
+    const useFinal = fin && finalDone;
+    const state_ = useFinal ? standingsEventState(matches, roundMs.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status)) ? null : false)
+                 : standingsEventState(matches.filter(m=>m.bracket!=='AMF'), evDone ? true : fin ? false : (isMex ? false : null));
     const standing = computeAmericanoStandings(individualEntries, matches);
-    if(fin && state_==='final'){
+    if(useFinal && state_==='final'){
       const win = entryById(fin.winnerEntryId), lose = entryById(fin.winnerEntryId===fin.entry1Id ? fin.entry2Id : fin.entry1Id);
       const champs = new Set(win ? entryPlayerIds(win) : []), runners = new Set(lose ? entryPlayerIds(lose) : []);
       let pos = 4;
@@ -2880,13 +2900,102 @@ function computeEventPlacements(eventId){
       const standing = computeGroupStandings(gEntries, gMatches, (draw&&draw.tiebreak)||TIEBREAK_DEFAULT);
       // Groups of a "groups + knockout" event are never the final result; a round robin is final once every match is played.
       const ev = eventById(eventId);
-      const st = standingsEventState(gMatches, (ev && ev.drawFormat==='group_knockout') ? false : null);
+      const st = standingsEventState(gMatches, (ev && ev.status==='completed') ? true : (ev && ev.drawFormat==='group_knockout') ? false : null);
       standing.forEach((row,i)=>{ const pl = standingPlacement(i+1, st); if(g.name && pl.label!=='Not started') pl.label += ' · '+g.name; placements[row.entryId] = pl; });
     });
   }
   return placements;
 }
 
+/* ============ FINISHING EVENTS AND TOURNAMENTS ============
+   Finishing locks the results: any match not yet played is cancelled (and can be
+   restored by reopening), and the final standings decide the champion - also when
+   an event is stopped early. */
+const DONE_STATUSES = ['completed','walkover','retired','bye','cancelled'];
+function eventEntryStats(ev){
+  const matches = eventMatches(ev.id), stats = {};
+  const entries = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam);
+  if(ev.drawFormat==='americano'){
+    computeAmericanoStandings(entries, matches).forEach(r=>{ const en = entries.find(e=>e.player1Id===r.playerId); if(en) stats[en.id] = {...r, pointDiff:r.pointsFor-r.pointsAgainst}; });
+  } else {
+    computeGroupStandings(entries.map(e=>e.id), matches.filter(m=>m.entry1Id && m.entry2Id), TIEBREAK_DEFAULT).forEach(r=>{ stats[r.entryId] = r; });
+  }
+  return stats;
+}
+/* Once an event is finished every placement is final and someone is champion:
+   rank by placement points, then position, wins, point difference, points won. */
+function finalizePlacements(ev, placements){
+  const entries = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam && placements[e.id]);
+  if(!entries.length) return placements;
+  entries.forEach(e=>{ const p = placements[e.id]; if(p.label) p.label = p.label.replace(' (still in)',''); });
+  if(entries.some(e=>placements[e.id].label==='Champion')){ entries.forEach(e=>{ if(placements[e.id].label!=='Not started') delete placements[e.id].provisional; }); return placements; }
+  const st = eventEntryStats(ev), z = {wins:0, pointDiff:0, pointsFor:0};
+  const played = entries.filter(e=>(st[e.id]||{}).played);
+  if(!played.length) return placements;
+  const order = entries.slice().sort((a,b)=>{
+    const pa=placements[a.id], pb=placements[b.id], sa=st[a.id]||z, sb=st[b.id]||z;
+    return ((pb.provisional?0:pb.points)-(pa.provisional?0:pa.points)) || ((pa.rank||999)-(pb.rank||999)) || (sb.wins-sa.wins) || (sb.pointDiff-sa.pointDiff) || (sb.pointsFor-sa.pointsFor);
+  });
+  order.forEach((e,i)=>{
+    const p = placements[e.id];
+    if(i===0){ placements[e.id] = {points:100, label:'Champion', rank:1}; return; }
+    if(i===1){ placements[e.id] = {points:70, label:'Runner-up', rank:2}; return; }
+    if(p.provisional){ placements[e.id] = {points: standingPoints(i+1), label:'#'+(i+1), rank:i+1}; return; }
+  });
+  return placements;
+}
+function eventChampions(evId){
+  const pl = computeEventPlacements(evId);
+  return eventEntries(evId).filter(e=>!e.isAmericanoTeam && pl[e.id] && pl[e.id].label==='Champion').map(e=>entryName(e));
+}
+async function finishEvent(ev, quiet){
+  const pending = eventMatches(ev.id).filter(m=>!DONE_STATUSES.includes(m.status));
+  for(const m of pending) await Store.update('matches', m.id, {status:'cancelled', cancelledByFinish:true, statusBeforeFinish:m.status});
+  await Store.update('events', ev.id, {status:'completed', finishedAt:nowIso()});
+  const champ = eventChampions(ev.id);
+  await notify(ev.tournamentId, null, 'results_published', ev.name + ' finished' + (champ.length ? ' - champion: ' + champ.join(' & ') : '') + '.');
+  await audit(ev.tournamentId, state.role, 'event_finished', ev.name + (pending.length ? ' (' + pending.length + ' unplayed matches cancelled)' : ''));
+  return champ;
+}
+async function reopenEvent(ev){
+  return act(async ()=>{
+    for(const m of eventMatches(ev.id).filter(m=>m.cancelledByFinish))
+      await Store.update('matches', m.id, {status: m.statusBeforeFinish || (m.entry1Id && m.entry2Id ? 'scheduled' : 'pending'), cancelledByFinish:false, statusBeforeFinish:null});
+    await Store.update('events', ev.id, {status:'in_progress', finishedAt:null});
+    const t = tournamentById(ev.tournamentId);
+    if(t && t.status==='completed') await Store.update('tournaments', t.id, {status:'in_progress'});
+    await audit(ev.tournamentId, state.role, 'event_reopened', ev.name);
+  }, 'Event reopened');
+}
+async function confirmFinishEvent(ev){
+  const pending = eventMatches(ev.id).filter(m=>m.entry1Id && m.entry2Id && !DONE_STATUSES.includes(m.status)).length;
+  const msg = 'Finish ' + ev.name + '? The final standings are locked in and the champion is published.' +
+    (pending ? ' ' + pending + ' match' + (pending===1?' isn\'t':'es aren\'t') + ' played yet and will be cancelled (reopen the event to bring them back).' : '');
+  if(!await confirmDialog(msg, {title:'Finish event', okLabel:'Finish event', danger:false})) return;
+  let champ = [];
+  await act(async ()=>{ champ = await finishEvent(eventById(ev.id)); });
+  toast(champ.length ? '🏆 ' + champ.join(' & ') + ' - champion of ' + ev.name : ev.name + ' finished');
+}
+async function confirmFinishTournament(t){
+  const evs = tEvents(t.id).filter(e=>e.status!=='completed');
+  const pending = tMatches(t.id).filter(m=>m.entry1Id && m.entry2Id && !DONE_STATUSES.includes(m.status)).length;
+  const msg = 'Finish ' + t.name + '? ' + (evs.length ? 'All ' + evs.length + ' open event' + (evs.length===1?'':'s') + ' will be finished and their champions published from the final standings.' : 'Every event is already finished.') +
+    (pending ? ' ' + pending + ' unplayed match' + (pending===1?'':'es') + ' will be cancelled.' : '');
+  if(!await confirmDialog(msg, {title:'Finish tournament', okLabel:'Finish tournament', danger:false})) return;
+  await act(async ()=>{
+    for(const ev of evs) await finishEvent(eventById(ev.id), true);
+    await Store.update('tournaments', t.id, {status:'completed', finishedAt:nowIso()});
+    await notify(t.id, null, 'results_published', t.name + ' is finished. Final results are published.');
+    await audit(t.id, state.role, 'tournament_finished', t.name);
+  }, 'Tournament finished - champions published');
+  state.tab = 'overview';
+}
+function renderChampionsCard(t){
+  const rows = tEvents(t.id).filter(e=>e.status==='completed').map(e=>({e, c:eventChampions(e.id)})).filter(r=>r.c.length);
+  if(!rows.length) return '';
+  return `<div class="champs-card"><div class="champs-h">${ICONS.trophy} Champions</div>
+    ${rows.map(r=>`<div class="champs-row"><span class="champs-ev">${esc(r.e.name)}</span><span class="champs-nm">${esc(r.c.join(' & '))}</span></div>`).join('')}</div>`;
+}
 function computePlayerStats(filterFn){
   const stats = {};
   function ensure(pid){
@@ -3337,7 +3446,7 @@ async function maybeCreateBracketReset(gf1){
   await notify(gf1.tournamentId, null, 'match_scheduled', 'Bracket reset required - Grand Final game two.');
 }
 async function checkEventCompletion(eventId){
-  const ev = eventById(eventId); if(!ev) return;
+  const ev = eventById(eventId); if(!ev || ev.status==='completed') return;
   const matches = eventMatches(eventId);
   if(!matches.length) return;
   /* Mexicano Americano generates one round at a time with no fixed round
@@ -4090,6 +4199,7 @@ function renderTournamentDetail(){
       ${state.role==='admin' ? `<div class="t-actions" data-more-scope data-more-title="${esc(t.name)}">
         <button class="btn btn-sm" id="btnShareTournament" aria-label="Share live link" title="Share live link">${ICONS.share} Share</button>
         <button class="btn btn-primary btn-sm m-overflow" id="btnRegisterPlayerHeader">${ICONS.plus} Register player</button>
+        ${t.status!=='completed'?`<button class="btn btn-sm m-overflow" id="btnFinishTournament">${ICONS.trophy} Finish tournament</button>`:''}
         <button class="btn btn-sm m-overflow" id="btnEditTournament">${ICONS.edit} Edit tournament</button>
         <button class="btn btn-danger btn-sm m-overflow" id="btnDeleteTournament">${ICONS.trash} Delete tournament</button>
         ${moreMenuBtn()}
@@ -4152,8 +4262,10 @@ function renderOverviewTab(t){
   const regByStatus = {confirmed:0, pending:0, waitlisted:0, withdrawn:0, rejected:0};
   regs.forEach(r=> regByStatus[r.status] = (regByStatus[r.status]||0)+1);
   const roleTabs = tabsForRole().map(x=>x[0]);
-  const go = k => roleTabs.includes(k) ? `data-tab="${k}" role="button"` : '';
+  const go = k => (roleTabs.includes(k) || (state.role==='admin' && ['players','courts','schedule','draws'].includes(k))) ? `data-tab="${k}" role="button"` : '';
   return `
+    ${renderChampionsCard(t)}
+    ${state.role==='admin' && t.status!=='completed' && evs.length && evs.every(e=>e.status==='completed') ? `<div class="finish-hint">Every event is finished. <button class="btn btn-sm btn-primary" id="btnFinishTournament">${ICONS.trophy} Finish tournament</button></div>`:''}
     <div class="stat-grid">
       <div class="stat-tile accent" ${go('players')}><div class="stat-num">${new Set(regs.map(r=>r.playerId)).size}</div><div class="stat-label">Registered players</div></div>
       <div class="stat-tile" ${go('events')}><div class="stat-num">${evs.length}</div><div class="stat-label">Events</div></div>
@@ -4212,7 +4324,8 @@ function renderEventCard(ev){
     <button class="icon-btn cat-del btn-danger" data-delete-event="${ev.id}" title="Delete event">${ICONS.trash}</button>
     <h3>${esc(ev.name)}</h3>
     <div class="sub-txt">${esc(ev.drawFormat.replace(/_/g,' '))} &middot; ${entries} ${isDoublesType(ev.type)&&ev.drawFormat!=='americano'?'teams':'players'}</div>
-    ${draw ? `<div class="ev-prog"><span style="width:${pct}%"></span></div>
+    ${ev.status==='completed' ? `<div class="champ-banner sm">${ICONS.trophy}<span><small>${eventChampions(ev.id).length?'Champion':'Finished &middot; no matches played'}</small>${esc(eventChampions(ev.id).join(' & '))}</span></div>`
+    : draw ? `<div class="ev-prog"><span style="width:${pct}%"></span></div>
       <div class="ev-prog-l"><span>${done} of ${ms.length} matches played</span>${live?`<span class="sb-live">&#9679; ${live} live</span>`:''}</div>`
       : `<div class="ev-prog-l"><span class="pill">No draw yet</span></div>`}
   </div>`;
@@ -4277,7 +4390,9 @@ function renderEventDrawCard(t, ev){
         <button class="btn btn-primary btn-sm" id="btnGenerateDraw">${ICONS.sparkles} ${draw?'Regenerate draw':'Generate draw'}</button>
         ${draw && draw.format==='group_knockout' ? `<button class="btn btn-sm" id="btnGenKnockout">Generate knockout from groups</button>`:''}
         ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')==='mexicano' ? `<button class="btn btn-sm" id="btnGenNextMexicanoRound">${ICONS.sparkles} Generate next round</button>`:''}
-        ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')==='mexicano' && ev.status!=='completed' && !americanoFinalMatch(ev.id) ? `<button class="btn btn-sm" id="btnFinishMexicano">${ICONS.check} Finish event</button>`:''}
+        ${draw && ev.status!=='completed' ? `<button class="btn btn-sm btn-finish" data-finish-event="${ev.id}">${ICONS.trophy} Finish event</button>`:''}
+        ${draw && ev.status==='completed' ? `<button class="btn btn-sm" data-reopen-event="${ev.id}">${ICONS.undo} Reopen event</button>`:''}
+        ${false ? `<button class="btn btn-sm" id="btnFinishMexicano">${ICONS.check} Finish event</button>`:''}
       </div>
       ${draw?`<div class="helptext" style="margin-top:6px">Generated ${esc(fmtDateTime(draw.generatedAt))}. Regenerating a published draw is confirmed and audit-logged.</div>`:''}
     </div>
@@ -4666,11 +4781,13 @@ function renderEventResultsCard(ev){
   const rows = entries.map(e=>({entry:e, st:stats[e.id]||{played:0,wins:0,losses:0,pointsFor:0}, ...(placements[e.id]||{points:0,label:'',provisional:true})}))
     .sort((a,b)=> (b.provisional?0:b.points)-(a.provisional?0:a.points) || ((a.rank||999)-(b.rank||999)) || (b.st.wins-a.st.wins) || (b.st.pointsFor-a.st.pointsFor));
   const played = matches.some(m=>['completed','walkover','retired'].includes(m.status));
-  const final = played && matches.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status));
+  const final = ev.status==='completed' || (played && matches.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status)));
   const st = final ? 'Final' : played ? 'In progress' : 'Not started';
   const fp = followedPlayer();
+  const champ = rows.filter(r=>r.label==='Champion').map(r=>entryName(r.entry));
   return `<div class="card res-card">
     ${head(st)}
+    ${champ.length ? `<div class="champ-banner">${ICONS.trophy}<span><small>Champion</small>${esc(champ.join(' & '))}</span></div>` : ''}
     <div class="table-scroll"><table class="data-table res-table"><thead><tr><th class="rk">#</th><th>${isDoublesType(ev.type)&&!isAm?'Team':'Player'}</th><th class="num">W-L</th><th class="num" title="Rally points won">Pts won</th><th class="num" title="Ranking points">Rank pts</th></tr></thead>
     <tbody>${rows.map((r,i)=>`<tr class="${fp && entryPlayerIds(r.entry).includes(fp.id)?'me-row':''} ${r.label==='Champion'?'champ':''}">
       <td class="rk mono">${i+1}</td>
@@ -4837,8 +4954,9 @@ function renderViewerStandings(t){
   const fp = followedPlayer();
   const body = evs.map(ev=>{
     const draw = eventDraw(ev.id), matches = eventMatches(ev.id);
-    const st = matches.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status)) && matches.some(m=>VM_DONE.includes(m.status)) ? 'Final' : matches.some(m=>VM_DONE.includes(m.status)) ? 'In progress' : 'Not started';
-    let inner = '';
+    const st = ev.status==='completed' || (matches.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status)) && matches.some(m=>VM_DONE.includes(m.status))) ? 'Final' : matches.some(m=>VM_DONE.includes(m.status)) ? 'In progress' : 'Not started';
+    const champ = eventChampions(ev.id);
+    let inner = champ.length ? `<div class="champ-banner">${ICONS.trophy}<span><small>Champion</small>${esc(champ.join(' & '))}</span></div>` : '';
     if(draw.format==='americano'){
       const ind = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam);
       const standing = computeAmericanoStandings(ind, matches);
@@ -4861,7 +4979,7 @@ function renderViewerStandings(t){
     }
     return `<div class="vm-card"><div class="vm-card-h"><h3>${esc(ev.name)}</h3><span class="pill ${st==='Final'?'gold':st==='In progress'?'court':''}">${st}</span></div>${inner}</div>`;
   }).join('');
-  return viewerEventFilter(t) + body;
+  return (f.eventId ? '' : renderChampionsCard(t)) + viewerEventFilter(t) + body;
 }
 function renderLiveInTournamentTab(t){
   const fp = followedPlayer();
@@ -6052,16 +6170,8 @@ document.addEventListener('click', async (e)=>{
     }
     case 'btnGenKnockout': { const ev=eventById(state.eventId); if(ev) await generateKnockoutFromGroups(ev); render(); return; }
     case 'btnGenNextMexicanoRound': { const ev=eventById(state.eventId); if(ev) await generateNextMexicanoRound(ev); render(); return; }
-    case 'btnFinishMexicano': {
-      const ev=eventById(state.eventId);
-      if(ev && await confirmDialog('Finish this event? Final standings will be locked in as the results.')){
-        await act(async ()=>{
-          await Store.update('events', ev.id, {status:'completed'});
-          await notify(ev.tournamentId, null, 'results_published', 'Results published for ' + ev.name + '.');
-        }, 'Event finished');
-      }
-      render(); return;
-    }
+    case 'btnFinishMexicano': { const ev=eventById(state.eventId); if(ev){ await confirmFinishEvent(ev); render(); } return; }
+    case 'btnFinishTournament': if(t){ await confirmFinishTournament(t); render(); window.scrollTo(0,0); } return;
     case 'btnGoDrawsFromEvent': { state.filters.drawEventId = state.eventId; state.tab='draws'; render(); return; }
     case 'btnExportDraw': { const ev=eventById(state.filters.drawEventId); if(ev) exportDraw(ev.id); return; }
     case 'btnPrintDraw': case 'btnPrintSchedule': case 'btnPrintResults': printView(); return;
@@ -6228,6 +6338,8 @@ document.addEventListener('click', async (e)=>{
     ['data-points-help', ()=>openPointsHelp()],
     ['data-filter-toggle', v=>{ state.mFilterOpen = state.mFilterOpen||{}; state.mFilterOpen[v] = !state.mFilterOpen[v]; render(); }],
     ['data-ev-sub', v=>{ state.eventSub = v; state.eventSubFor = state.eventId; render(); }],
+    ['data-finish-event', async v=>{ const ev=eventById(v); if(ev){ await confirmFinishEvent(ev); render(); } }],
+    ['data-reopen-event', async v=>{ const ev=eventById(v); if(ev && await confirmDialog('Reopen '+ev.name+'? Matches cancelled when it was finished come back, and the champion is withdrawn until it is finished again.', {title:'Reopen event', okLabel:'Reopen', danger:false})){ await reopenEvent(ev); render(); } }],
     ['data-am-final', v=>{ const ev=eventById(v); if(ev) openAmericanoFinalDialog(ev); }],
     ['data-am-final-remove', async v=>{ const ev=eventById(v); if(ev){ await removeAmericanoFinal(ev); render(); } }],
     ['data-open-schedule', v=>{ const m=matchById(v); if(m) openScheduleDialog(m); }],
