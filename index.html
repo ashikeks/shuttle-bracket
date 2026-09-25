@@ -1019,28 +1019,37 @@ const ShareAPI = {
     if(/^eyJ/.test(key)) h['Authorization']='Bearer '+key;   // legacy anon JWT; new sb_publishable_ keys go in apikey only
     return h;
   },
-  async rpc(cfg, fn, body){
+  async rpc(cfg, fn, body, timeoutMs){
+    timeoutMs = timeoutMs || 15000;
     const ctrl = ('AbortController' in window) ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(()=>ctrl.abort(), 15000) : null;
-    let res;
+    let timer, res, timedOut=false;
+    // Race the request against a timer: some sandboxes never settle a blocked fetch.
+    const timeout = new Promise((_,rej)=>{ timer = setTimeout(()=>{ timedOut=true; const err=new Error('timeout'); err.offline=true; err.timeout=true; rej(err); try{ ctrl && ctrl.abort(); }catch(e){} }, timeoutMs); });
     try{
-      res = await fetch(cfg.url+'/rest/v1/rpc/'+fn, {method:'POST', headers:ShareAPI.headers(cfg.key), body:JSON.stringify(body||{}), cache:'no-store', signal:ctrl?ctrl.signal:undefined});
+      res = await Promise.race([
+        fetch(normalizeSupabaseUrl(cfg.url)+'/rest/v1/rpc/'+fn, {method:'POST', headers:ShareAPI.headers(cfg.key), body:JSON.stringify(body||{}), cache:'no-store', signal:ctrl?ctrl.signal:undefined}),
+        timeout
+      ]);
     }catch(e){
-      const err = new Error('offline'); err.offline = true; throw err;
-    }finally{ if(timer) clearTimeout(timer); }
+      if(e && e.timeout) throw e;
+      if(timedOut || (e && e.name==='AbortError')){ const err=new Error('timeout'); err.offline=true; err.timeout=true; throw err; }
+      const err = new Error('offline'); err.offline = true; err.detail = (e && (e.message||e.name)) || ''; throw err;
+    }finally{ clearTimeout(timer); }
     const text = await res.text();
     let json=null; try{ json = text ? JSON.parse(text) : null; }catch(e){}
     if(!res.ok){
       const err = new Error((json && (json.message||json.msg||json.error)) || ('HTTP '+res.status));
-      err.status = res.status; err.code = json && json.code; throw err;
+      err.status = res.status; err.code = json && json.code; err.body = (text||'').slice(0,200); throw err;
     }
     return json;
   },
   explain(e){
     if(!e) return 'Unknown error';
-    if(e.offline) return inClaudeFrame()
-      ? 'Can\'t reach Supabase from inside Claude (this page is sandboxed). Use the iPhone app or your hosted copy of the app to share live.'
-      : 'Can\'t reach Supabase. Check the internet connection and the project URL.';
+    if(e.offline && inClaudeFrame()) return 'This page is running inside Claude, which doesn\'t let pages send data to other websites, so it can\'t reach Supabase. Create and update live links from the iPhone app (or your hosted copy of the app) instead.';
+    if(e.timeout) return 'No answer from Supabase within 15 seconds. Check the Project URL (it looks like https://abcdefgh.supabase.co) and that the project isn\'t paused.';
+    if(e.offline) return 'Couldn\'t connect to Supabase'+(e.detail?' ('+e.detail+')':'')+'. Check the internet connection and that the Project URL looks like https://abcdefgh.supabase.co.';
+    if(e.status===404 && !e.code) return 'Supabase answered "not found" (404). The Project URL is probably wrong: use the one from Project Settings → Data API, like https://abcdefgh.supabase.co.';
+    if(e.status===540 || /paused/i.test(e.message||'')) return 'The Supabase project is paused. Open the Supabase dashboard and click Resume project.';
     if(e.code==='PGRST202' || /could not find the function/i.test(e.message)) return 'The database isn\'t set up yet: run sharing/supabase_setup.sql in the Supabase SQL Editor.';
     if(e.code==='SB403' || e.code==='42501' || /wrong edit key/i.test(e.message)) return 'This link belongs to another copy of the tournament. Stop sharing and create a new link.';
     if(e.code==='SB410') return 'This link expired: it wasn\'t updated for '+SHARE_KEEP_DAYS+' days, so it was removed. Create a new link to share again.';
@@ -1052,7 +1061,22 @@ const ShareAPI = {
     return e.message;
   }
 };
-function inClaudeFrame(){ try{ return window.top!==window.self && /claude/.test(document.referrer||''); }catch(e){ return true; } }
+/* Running as the web version inside Claude? (Its page may not contact other websites.) */
+function inClaudeFrame(){
+  if(window.__SB_NATIVE__ || Native.has('sbStore')) return false;
+  try{ if(window.claude && typeof window.claude.use==='function') return true; }catch(e){}
+  try{ if(/(^|\.)(claude\.ai|claudeusercontent\.com|anthropic\.com)$/.test(location.hostname)) return true; }catch(e){}
+  try{ return window.top!==window.self && /claude/.test(document.referrer||''); }catch(e){ return true; }
+}
+/* Accept what people paste: dashboard links, trailing /rest/v1, missing https. */
+function normalizeSupabaseUrl(u){
+  u = String(u||'').trim();
+  const dash = u.match(/supabase\.com\/dashboard\/project\/([a-z0-9]{10,40})/i);
+  if(dash) return 'https://'+dash[1].toLowerCase()+'.supabase.co';
+  if(/^[a-z0-9]{15,40}$/i.test(u)) return 'https://'+u.toLowerCase()+'.supabase.co';     // just the project ref
+  if(!/^https?:\/\//i.test(u) && u) u = 'https://'+u;
+  return u.replace(/\/(rest|auth)\/v1.*$/i,'').replace(/\/+$/,'');
+}
 
 /* The read-only copy of one tournament that a link shows. */
 const SHARE_PLAYER_FIELDS = ['id','name','gender','clubId','skillLevel','rankingPoints','nationality','createdAt'];
@@ -4333,6 +4357,7 @@ function renderShareSettingsCard(){
   return `<div class="card" id="shareSettingsCard">
       <h3 style="font-family:'Public Sans';font-size:14px;text-transform:none;letter-spacing:0;margin-bottom:6px">Live sharing</h3>
       <p class="helptext" style="margin:0 0 10px">Share a live link to a tournament that anyone can open in a browser. It needs a free Supabase project and a web address for the viewer page, set up once (see <b>sharing/SHARING_SETUP.md</b>).</p>
+      ${inClaudeFrame() ? `<div class="reg-banner closed" style="margin-bottom:10px">${ICONS.warn}<span>You're using the web version inside Claude, which can't contact Supabase. Set up and share live links from the <b>iPhone app</b> (or your hosted copy of the app); the settings are the same there.</span></div>` : ''}
       <div class="field"><label>Supabase project URL</label><input id="setShareUrl" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://abcdefghijklmnop.supabase.co" value="${val('url')}"></div>
       <div class="field"><label>Publishable key (or anon key)</label><input id="setShareKey" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sb_publishable_..." value="${val('key')}"></div>
       <div class="field"><label>Viewer page address</label><input id="setShareViewer" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://yourname.github.io/shuttle-bracket/" value="${val('viewerUrl')}"></div>
@@ -5400,7 +5425,8 @@ document.addEventListener('click', async (e)=>{
       return;
     }
     case 'btnSaveShareSettings': case 'btnTestShare': {
-      const url = document.getElementById('setShareUrl').value.trim().replace(/\/+$/,'');
+      const rawUrl = document.getElementById('setShareUrl').value.trim();
+      const url = normalizeSupabaseUrl(rawUrl);
       const key = document.getElementById('setShareKey').value.trim();
       const viewerUrl = document.getElementById('setShareViewer').value.trim();
       const out = document.getElementById('shareTestResult');
@@ -5412,11 +5438,25 @@ document.addEventListener('click', async (e)=>{
         return;
       }
       if(!url || !key){ out.textContent = 'Enter the project URL and key first.'; return; }
+      const nurl = normalizeSupabaseUrl(url);
+      if(!/^https:\/\/[^\s/]+$/.test(nurl)){ out.textContent = 'The Project URL should look like https://abcdefgh.supabase.co'; return; }
+      if(/^sb_secret_/.test(key) || /service_role/.test(key)){ out.innerHTML = '<b style="color:var(--danger)">That\'s a secret key.</b> Never put it in the app. Use the <b>publishable</b> key (sb_publishable_…) or the anon key.'; return; }
+      const btn = document.getElementById('btnTestShare'); if(btn) btn.disabled = true;
+      const t0 = Date.now();
+      const tick = setInterval(()=>{ out.textContent = 'Testing… '+Math.round((Date.now()-t0)/1000)+' s'; }, 500);
       out.textContent = 'Testing…';
+      if(nurl!==rawUrl){ const el=document.getElementById('setShareUrl'); if(el) el.value = nurl; }
       try{
-        const r = await ShareAPI.rpc({url, key}, 'sb_updated_at', {p_id:'ConnectionTest00'});
-        out.innerHTML = r===null ? '<b style="color:var(--court)">Connected.</b> The database is set up and ready.' : 'Connected.';
-      }catch(err){ out.textContent = 'Not working yet: ' + ShareAPI.explain(err); }
+        const r = await ShareAPI.rpc({url:nurl, key}, 'sb_updated_at', {p_id:'ConnectionTest00'}, 15000);
+        out.innerHTML = (r===null ? '<b style="color:var(--win)">Connected.</b> The database is set up and ready.' : '<b style="color:var(--win)">Connected.</b>')
+          + (nurl!==rawUrl ? ` <span class="sub-txt">(using ${esc(nurl)})</span>` : '')
+          + ` <span class="sub-txt">${Math.round((Date.now()-t0))} ms</span>`;
+        if(nurl!==rawUrl){ const el=document.getElementById('setShareUrl'); if(el) el.value = nurl; }
+      }catch(err){
+        out.innerHTML = '<b style="color:var(--danger)">Not working yet:</b> ' + esc(ShareAPI.explain(err))
+          + (nurl!==rawUrl ? ` <span class="sub-txt">(tried ${esc(nurl)})</span>` : '')
+          + ((err.status||err.detail) ? `<div class="sub-txt" style="margin-top:4px">Details: ${esc([err.status?'HTTP '+err.status:'', err.code||'', err.detail||'', err.body&&!err.code?err.body:''].filter(Boolean).join(' · '))}</div>` : '');
+      }finally{ clearInterval(tick); if(btn) btn.disabled = false; }
       return;
     }
     case 'btnUnfollow': setFollow(null); return;
