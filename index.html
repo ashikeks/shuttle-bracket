@@ -1025,12 +1025,24 @@ const ShareAPI = {
     let timer, res, timedOut=false;
     // Race the request against a timer: some sandboxes never settle a blocked fetch.
     const timeout = new Promise((_,rej)=>{ timer = setTimeout(()=>{ timedOut=true; const err=new Error('timeout'); err.offline=true; err.timeout=true; rej(err); try{ ctrl && ctrl.abort(); }catch(e){} }, timeoutMs); });
+    const url = normalizeSupabaseUrl(cfg.url)+'/rest/v1/rpc/'+fn;
     try{
-      res = await Promise.race([
-        fetch(normalizeSupabaseUrl(cfg.url)+'/rest/v1/rpc/'+fn, {method:'POST', headers:ShareAPI.headers(cfg.key), body:JSON.stringify(body||{}), cache:'no-store', signal:ctrl?ctrl.signal:undefined}),
-        timeout
-      ]);
+      if(Native.has('sbFetch')){
+        // iPhone app: iOS makes the request (a page loaded from a local file can't reach other sites directly).
+        const r = await Promise.race([
+          window.webkit.messageHandlers.sbFetch.postMessage({url, method:'POST', headers:ShareAPI.headers(cfg.key), body:JSON.stringify(body||{})}),
+          timeout
+        ]);
+        if(!r || r.error){ const err = new Error('offline'); err.offline = true; err.detail = (r && r.error) || 'no response'; err.native = true; throw err; }
+        res = { ok: !!r.ok, status: r.status|0, text: async ()=> r.text || '' };
+      } else {
+        res = await Promise.race([
+          fetch(url, {method:'POST', headers:ShareAPI.headers(cfg.key), body:JSON.stringify(body||{}), cache:'no-store', signal:ctrl?ctrl.signal:undefined}),
+          timeout
+        ]);
+      }
     }catch(e){
+      if(e && e.native) throw e;
       if(e && e.timeout) throw e;
       if(timedOut || (e && e.name==='AbortError')){ const err=new Error('timeout'); err.offline=true; err.timeout=true; throw err; }
       const err = new Error('offline'); err.offline = true; err.detail = (e && (e.message||e.name)) || ''; throw err;
@@ -2258,6 +2270,30 @@ function matchWindow(m){
 }
 /* Returns [] when clear, else a list of {type:'court'|'rest', match}. Both
    entries in a doubles pair count as "the same player" being busy. */
+/* Minimum rest a player gets after a match before their next one: 2 minutes
+   after a one-game match, 15 minutes after best of 3 or best of 5. A tournament
+   can raise these (Settings -> Logistics) but never go below them. */
+const MIN_REST_SINGLE = 2, MIN_REST_MULTI = 15;
+function restMinutesAfter(match){
+  const t = tournamentById(match.tournamentId), ev = eventById(match.eventId);
+  const cfg = scoringFor(ev, t, match) || {};
+  return (cfg.bestOf||3) <= 1
+    ? Math.max(MIN_REST_SINGLE, (t && t.restSingleMin) || MIN_REST_SINGLE)
+    : Math.max(MIN_REST_MULTI, (t && t.restMultiMin) || MIN_REST_MULTI);
+}
+/* When can this match's players next start, given matches already scheduled? */
+function earliestStartFor(match, excludeId){
+  const players = new Set(matchEntryPlayerIds(match));
+  let earliest = 0, because = null;
+  for(const m of state.matches){
+    if(m.id===match.id || m.id===excludeId || m.tournamentId!==match.tournamentId || m.status==='cancelled') continue;
+    if(!matchEntryPlayerIds(m).some(p=>players.has(p))) continue;
+    const w = matchWindow(m); if(!w) continue;
+    const free = w.end + restMinutesAfter(m)*60000;
+    if(free > earliest){ earliest = free; because = m; }
+  }
+  return {time: earliest, because};
+}
 function checkSchedulingConflict(tournamentId, matchId, courtId, scheduledStart, estDurationMin, restMinutes){
   const win = matchWindow({scheduledStart, estDurationMin});
   if(!win) return [];
@@ -2277,9 +2313,12 @@ function checkSchedulingConflict(tournamentId, matchId, courtId, scheduledStart,
     const oPlayers = new Set(matchEntryPlayerIds(m));
     const shared = [...thisPlayers].some(p=>oPlayers.has(p));
     if(shared){
-      const rest = (restMinutes||0)*60000;
-      if(timeOverlap(win.start-rest, win.end+rest, oWin.start, oWin.end)){
-        conflicts.push({type:'rest', match:m});
+      // Each match is followed by its own rest: 2 min after a one-game match, 15 after best of 3/5.
+      const restThis = restMinutesAfter({...thisMatch, tournamentId})*60000;
+      const restOther = restMinutesAfter(m)*60000;
+      if(timeOverlap(win.start, win.end+restThis, oWin.start, oWin.end+restOther)){
+        conflicts.push({type:'rest', match:m, restMin: Math.round((oWin.start < win.start ? restOther : restThis)/60000),
+          freeAt: oWin.start < win.start ? oWin.end+restOther : null});
       }
     }
   }
@@ -2369,6 +2408,21 @@ function roundLabelFor(bracket, round, maxRound, isThirdPlace){
   return (bracket==='LB'?'Losers Round ':'Round ')+round;
 }
 
+/* Standings-based events (Americano, round robin, groups) only hand out finishing
+   points once every match is decided. Before that the table shows the position so
+   far with no points, and before the first result nobody has a position at all. */
+function standingsEventState(matches, finishedOverride){
+  const DONE = ['completed','walkover','retired','bye','cancelled'];
+  const played = matches.filter(m=>['completed','walkover','retired'].includes(m.status)).length;
+  if(!played) return 'not_started';
+  const final = finishedOverride===false ? false : finishedOverride===true ? true : matches.every(m=>DONE.includes(m.status));
+  return final ? 'final' : 'in_progress';
+}
+function standingPlacement(pos, st){
+  if(st==='not_started') return {points:0, label:'Not started', rank:pos, provisional:true};
+  if(st==='in_progress') return {points:0, label:'#'+pos+' so far', rank:pos, provisional:true};
+  return {points: standingPoints(pos), label:'#'+pos, rank:pos};
+}
 function computeEventPlacements(eventId){
   const matches = eventMatches(eventId);
   const entries = eventEntries(eventId);
@@ -2399,10 +2453,12 @@ function computeEventPlacements(eventId){
     });
   } else if(hasAM){
     const individualEntries = entries.filter(e=>!e.isAmericanoTeam);
+    const ev = eventById(eventId);
+    const state_ = standingsEventState(matches, ev && (ev.americanoVariant||'classic')==='mexicano' ? ev.status==='completed' : null);
     const standing = computeAmericanoStandings(individualEntries, matches);
     standing.forEach((row,i)=>{
       const ent = individualEntries.find(e=>e.player1Id===row.playerId);
-      if(ent) placements[ent.id] = {points: standingPoints(i+1), label:'#'+(i+1)};
+      if(ent) placements[ent.id] = standingPlacement(i+1, state_);
     });
   } else if(hasGroup || hasRR){
     const draw = eventDraw(eventId);
@@ -2411,7 +2467,10 @@ function computeEventPlacements(eventId){
       const gEntries = (g.entryIds && g.entryIds.length) ? g.entryIds : entries.map(e=>e.id);
       const gMatches = matches.filter(m=> g.id ? m.groupId===g.id : !m.groupId);
       const standing = computeGroupStandings(gEntries, gMatches, (draw&&draw.tiebreak)||TIEBREAK_DEFAULT);
-      standing.forEach((row,i)=>{ placements[row.entryId] = {points: standingPoints(i+1), label:'#'+(i+1)+(g.name?' '+g.name:'')}; });
+      // Groups of a "groups + knockout" event are never the final result; a round robin is final once every match is played.
+      const ev = eventById(eventId);
+      const st = standingsEventState(gMatches, (ev && ev.drawFormat==='group_knockout') ? false : null);
+      standing.forEach((row,i)=>{ const pl = standingPlacement(i+1, st); if(g.name && pl.label!=='Not started') pl.label += ' · '+g.name; placements[row.entryId] = pl; });
     });
   }
   return placements;
@@ -2467,7 +2526,7 @@ async function createTournament(data){
       startDate:data.startDate||'', endDate:data.endDate||data.startDate||'',
       regOpenDate:data.regOpenDate||'', regCloseDate:data.regCloseDate||'',
       status:data.status||'draft', maxParticipants:data.maxParticipants||0, entryFee:data.entryFee||0,
-      numCourts:data.numCourts||4, matchDurationMin:data.matchDurationMin||30, restTimeMin:data.restTimeMin||20,
+      numCourts:data.numCourts||4, matchDurationMin:data.matchDurationMin||30, restSingleMin:MIN_REST_SINGLE, restMultiMin:MIN_REST_MULTI,
       scoring:{...DEFAULT_SCORING}, seedingRules:'ranking', defaultDrawFormat:'single_elimination'
     });
     state.tid = id; state.view='tdetail'; state.tab='overview';
@@ -2708,11 +2767,13 @@ async function deleteCourt(id){ return act(async ()=> Store.remove('courts', id)
 
 /* ---- Scheduling ---- */
 async function assignMatchSchedule(match, courtId, scheduledStart, estDurationMin){
-  const tournament = tournamentById(match.tournamentId);
-  const rest = tournament ? tournament.restTimeMin : 20;
-  const conflicts = checkSchedulingConflict(match.tournamentId, match.id, courtId, scheduledStart, estDurationMin, rest);
+  const conflicts = checkSchedulingConflict(match.tournamentId, match.id, courtId, scheduledStart, estDurationMin);
   if(conflicts.length){
-    const kind = conflicts[0].type==='court' ? 'That court is already booked in this window.' : 'A player/team in this match needs more rest before/after another match.';
+    const c = conflicts.find(x=>x.type==='court') || conflicts[0];
+    let kind;
+    if(c.type==='court') kind = 'That court is already booked at this time.';
+    else if(c.freeAt) kind = 'A player needs '+c.restMin+' min rest after their match ('+entryName(entryById(c.match.entry1Id))+' vs '+entryName(entryById(c.match.entry2Id))+'). Earliest start: '+fmtTime(new Date(c.freeAt).toISOString())+'.';
+    else kind = 'A player has another match too soon after this one ('+c.restMin+' min rest needed).';
     toast('Scheduling conflict: ' + kind, true);
     return false;
   }
@@ -2991,7 +3052,7 @@ async function downloadCSV(filename, csv){
 function exportPlayers(){
   downloadCSV('players.csv', toCSV(
     [{label:'Name',key:'name'},{label:'Club',get:p=>(clubById(p.clubId)||{}).name||''},{label:'Gender',key:'gender'},
-     {label:'Skill level',key:'skillLevel'},{label:'Email',key:'email'},{label:'Phone',key:'phone'}], state.players));
+     {label:'Skill level',key:'skillLevel'}], state.players));
 }
 function exportRegistrations(tid){
   downloadCSV('registrations.csv', toCSV(
@@ -3115,7 +3176,7 @@ async function seedDemoData(){
       name:'Autumn Club Championships', description:'Annual club-wide badminton championships across four events.',
       logoUrl:'', organizer:'Riverside BC', venue:'Riverside Sports Hall', address:'12 River Road',
       startDate:start, endDate:end, regOpenDate:'', regCloseDate:'', status:'in_progress',
-      maxParticipants:64, entryFee:15, numCourts:6, matchDurationMin:30, restTimeMin:20,
+      maxParticipants:64, entryFee:15, numCourts:6, matchDurationMin:30, restSingleMin:2, restMultiMin:15,
       scoring:{...DEFAULT_SCORING}, seedingRules:'ranking', defaultDrawFormat:'single_elimination'
     });
 
@@ -3157,7 +3218,7 @@ async function seedDemoData(){
       name:'Winter Open', description:'Open tournament for all clubs. Singles, mixed doubles and an Americano night.',
       logoUrl:'', organizer:'Riverside BC', venue:'Oakwood Sports Centre', address:'',
       startDate:localDateStr(soon(17)), endDate:localDateStr(soon(18)), regOpenDate:'', regCloseDate:deadline.toISOString(),
-      status:'registration_open', maxParticipants:64, entryFee:20, numCourts:4, matchDurationMin:30, restTimeMin:20,
+      status:'registration_open', maxParticipants:64, entryFee:20, numCourts:4, matchDurationMin:30, restSingleMin:2, restMultiMin:15,
       scoring:{...DEFAULT_SCORING}, seedingRules:'ranking', defaultDrawFormat:'single_elimination'
     });
     for(let i=1;i<=4;i++) await Store.add('courts', {tournamentId:tid2, name:'Court '+i, active:true});
@@ -3519,7 +3580,7 @@ function renderDashboard(){
       <p>Create a tournament, register players, generate seeded draws (single/double elimination, round robin, or groups + knockout), schedule courts, score matches courtside, and publish rankings - all in one place.</p>
       <div class="hero-actions">
         ${state.role==='admin'?`<button class="btn btn-primary" id="btnNewTournamentHero">${ICONS.plus} New tournament</button>`:''}
-        <button class="btn" id="btnLoadDemo">${ICONS.sparkles} Load demo data</button>
+        <button class="btn" data-nav="settings">${ICONS.sparkles} Try demo data (in Settings)</button>
       </div>
     </div>`;
   }
@@ -3530,7 +3591,7 @@ function renderDashboard(){
   const completedMatches = state.matches.filter(m=>['completed','walkover','retired','bye'].includes(m.status)).length;
   return `
     <div class="t-header"><div><h2>Dashboard</h2><div class="t-sub">Across all tournaments</div></div>
-      <div class="t-actions">${state.role==='admin'?`<button class="btn btn-primary btn-sm" id="btnNewTournamentHero">${ICONS.plus} New tournament</button>`:''}<button class="btn btn-sm" id="btnLoadDemo">${ICONS.sparkles} Load demo data</button>${state.role==='admin'?`<button class="btn btn-sm btn-danger" id="btnResetAllData">${ICONS.trash} Reset all data</button>`:''}</div>
+      <div class="t-actions">${state.role==='admin'?`<button class="btn btn-primary btn-sm" id="btnNewTournamentHero">${ICONS.plus} New tournament</button>`:''}</div>
     </div>
     <div class="stat-grid">
       <div class="stat-tile accent"><div class="stat-num">${t.length}</div><div class="stat-label">Tournaments</div></div>
@@ -4078,8 +4139,9 @@ function renderEventResultsCard(ev){
   const draw = eventDraw(ev.id);
   if(!draw) return `<div class="card"><h3 style="font-family:'Public Sans';font-size:15px;text-transform:none;letter-spacing:0">${esc(ev.name)}</h3><div class="sub-txt">Draw not generated yet.</div></div>`;
   const placements = computeEventPlacements(ev.id);
-  const ranked = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam).map(e=>({entry:e, ...(placements[e.id]||{points:0,label:'In progress'})})).sort((a,b)=>b.points-a.points);
-  const podium = ranked.filter(r=>['Champion','Runner-up'].includes(r.label) || /^#[123]/.test(r.label)).slice(0,4);
+  const ranked = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam).map(e=>({entry:e, ...(placements[e.id]||{points:0,label:'In progress'})}))
+    .sort((a,b)=> (b.points-a.points) || ((a.rank||999)-(b.rank||999)));
+  const podium = ranked.filter(r=>!r.provisional && (['Champion','Runner-up'].includes(r.label) || /^#[123]$/.test(r.label))).slice(0,4);
   return `<div class="card">
     <div class="row between wrap"><h3 style="font-family:'Public Sans';font-size:15px;text-transform:none;letter-spacing:0;margin:0">${esc(ev.name)}</h3>
       <button class="btn btn-sm no-print" data-export-standings="${ev.id}">${ICONS.download} Export</button></div>
@@ -4087,7 +4149,8 @@ function renderEventResultsCard(ev){
       ${podium.map(r=>`<span class="pill ${r.label==='Champion'?'gold':'court'}">${esc(r.label)}: ${esc(entryName(r.entry))}</span>`).join('') || '<span class="sub-txt">Still in progress.</span>'}
     </div>
     <div class="table-scroll"><table class="data-table"><thead><tr><th>Entry</th><th>Placement</th><th class="num">Points</th></tr></thead>
-    <tbody>${ranked.map(r=>`<tr class="${followedPlayer() && entryPlayerIds(r.entry).includes(followedPlayer().id)?'me-row':''}"><td>${esc(entryName(r.entry))}</td><td>${esc(r.label)}</td><td class="num mono">${r.points}</td></tr>`).join('')}</tbody></table></div>
+    <tbody>${ranked.map(r=>`<tr class="${followedPlayer() && entryPlayerIds(r.entry).includes(followedPlayer().id)?'me-row':''}"><td>${esc(entryName(r.entry))}</td><td>${esc(r.label)}</td><td class="num mono">${r.provisional?'&ndash;':r.points}</td></tr>`).join('')}</tbody></table></div>
+    ${ranked.some(r=>r.provisional) ? `<div class="helptext" style="margin-top:6px">Ranking points are awarded when every match in the event has been played.</div>` : ''}
   </div>`;
 }
 
@@ -4177,7 +4240,7 @@ function renderFollowTab(t){
     const pl = Object.assign({}, (computeEventPlacements(ev.id)||{})[en.id] || {});
     const stillToPlay = ms.some(m=>m.eventId===ev.id && !['completed','walkover','retired','bye','cancelled'].includes(m.status));
     if(!pl.label || (pl.label==='Did not play' && stillToPlay)) pl.label = stillToPlay ? 'Upcoming' : (pl.label||'In progress');
-    return `<div class="list-row"><span class="grow main-txt">${esc(ev.name)}</span><span class="pill ${pl.label==='Champion'?'gold':'court'}">${esc(pl.label||'In progress')}</span>${pl.points!=null?`<span class="mono sub-txt">${pl.points} pts</span>`:''}</div>`;
+    return `<div class="list-row"><span class="grow main-txt">${esc(ev.name)}</span><span class="pill ${pl.label==='Champion'?'gold':'court'}">${esc(pl.label||'In progress')}</span>${pl.points!=null && !pl.provisional?`<span class="mono sub-txt">${pl.points} pts</span>`:''}</div>`;
   }).filter(Boolean);
   return `
     <div class="follow-hero">
@@ -4368,10 +4431,23 @@ function renderShareSettingsCard(){
       <div class="helptext" id="shareTestResult" style="margin-top:8px"></div>
     </div>`;
 }
+function renderDataSettingsCard(){
+  const n = state.tournaments.length;
+  return `<div class="card" id="dataSettingsCard">
+      <h3 style="font-family:'Public Sans';font-size:14px;text-transform:none;letter-spacing:0;margin-bottom:6px">Data</h3>
+      <p class="helptext" style="margin:0 0 10px">Demo data adds a tournament in progress (with draws and results) and one open for registration, so you can try every feature. It can only be loaded when the app is empty.</p>
+      <div class="row wrap" style="gap:8px">
+        <button class="btn btn-sm" id="btnLoadDemo" ${n?'disabled title="Only available when there are no tournaments"':''}>${ICONS.sparkles} Load demo data</button>
+        <button class="btn btn-sm btn-danger" id="btnResetAllData" ${n||state.players.length?'':'disabled'}>${ICONS.trash} Reset all data</button>
+      </div>
+      <p class="helptext" style="margin:8px 0 0">Reset deletes every tournament, player, club, draw and result on this device. It can't be undone.</p>
+    </div>`;
+}
 function renderSettingsView(){
   const t = currentTournament();
   if(!t) return `<div class="t-header"><div><h2>Settings</h2><div class="t-sub">App settings</div></div></div>
     ${renderShareSettingsCard()}
+    ${renderDataSettingsCard()}
     <div class="empty-tab">Open a tournament to edit its scoring and logistics here.</div>`;
   const sc = t.scoring||DEFAULT_SCORING;
   return `
@@ -4394,14 +4470,19 @@ function renderSettingsView(){
       <div class="field-row">
         <div class="field"><label>Courts</label><input type="number" id="setNumCourts" value="${t.numCourts}"></div>
         <div class="field"><label>Match duration (min)</label><input type="number" id="setMatchDur" value="${t.matchDurationMin}"></div>
-        <div class="field"><label>Rest time (min)</label><input type="number" id="setRestTime" value="${t.restTimeMin}"></div>
       </div>
+      <div class="field-row">
+        <div class="field"><label>Rest after 1-game match (min)</label><input type="number" id="setRestSingle" min="${MIN_REST_SINGLE}" value="${Math.max(MIN_REST_SINGLE, t.restSingleMin||MIN_REST_SINGLE)}"></div>
+        <div class="field"><label>Rest after best of 3/5 (min)</label><input type="number" id="setRestMulti" min="${MIN_REST_MULTI}" value="${Math.max(MIN_REST_MULTI, t.restMultiMin||MIN_REST_MULTI)}"></div>
+      </div>
+      <div class="helptext" style="margin-bottom:8px">Minimum time a player rests before their next match: at least ${MIN_REST_SINGLE} min after a one-game match (e.g. Americano) and at least ${MIN_REST_MULTI} min after best of 3 or 5. Scheduling a match sooner is blocked.</div>
       <div class="field"><label>Tournament status</label><select id="setStatus">
         ${['draft','registration_open','registration_closed','draw_published','in_progress','completed','cancelled'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s.replace(/_/g,' ')}</option>`).join('')}
       </select></div>
       <button class="btn btn-primary btn-sm" id="btnSaveLogistics" style="margin-top:10px">Save</button>
     </div>
     ${renderShareSettingsCard()}
+    ${renderDataSettingsCard()}
   `;
 }
 
@@ -4903,7 +4984,6 @@ function openPlayerDialog(existing, tournamentId){
       <div class="field"><label>Skill level</label><select id="fPSkill">${['beginner','intermediate','advanced'].map(v=>`<option value="${v}" ${p.skillLevel===v?'selected':''}>${v}</option>`).join('')}</select></div>
     </div>
     <div class="field"><label>Club</label><select id="fPClub"><option value="">No club</option>${state.clubs.map(c=>`<option value="${c.id}" ${p.clubId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
-    <div class="field-row"><div class="field"><label>Email</label><input id="fPEmail" value="${esc(p.email||'')}"></div><div class="field"><label>Phone</label><input id="fPPhone" value="${esc(p.phone||'')}"></div></div>
     ${evs.length ? `<div class="field" style="border-top:1px solid var(--border);padding-top:12px;margin-top:2px">
       <label>Register for event (optional)</label>
       <select id="fPRegEvent"><option value="">Don't register yet</option>${evs.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
@@ -4926,7 +5006,7 @@ function openPlayerDialog(existing, tournamentId){
     if(!name){ toast('Name is required', true); return; }
     const data = {
       name, gender:document.getElementById('fPGender').value, skillLevel:document.getElementById('fPSkill').value,
-      clubId: document.getElementById('fPClub').value||null, email:document.getElementById('fPEmail').value.trim(), phone:document.getElementById('fPPhone').value.trim()
+      clubId: document.getElementById('fPClub').value||null
     };
     if(existing){
       await updatePlayer(existing.id, data);
@@ -4986,9 +5066,16 @@ function openClubDialog(){
 function openScheduleDialog(match){
   const t = tournamentById(match.tournamentId);
   const courts = tCourts(match.tournamentId).filter(c=>c.active);
-  const dt = match.scheduledStart ? new Date(match.scheduledStart) : new Date();
-  const dateVal = dt.toISOString().slice(0,10);
-  const timeVal = dt.toTimeString().slice(0,5);
+  // Not scheduled yet: suggest the first time (5-minute steps) when both sides have had their rest.
+  const early = earliestStartFor(match);
+  let dt;
+  if(match.scheduledStart) dt = new Date(match.scheduledStart);
+  else { const step=5*60000; dt = new Date(Math.ceil(Math.max(Date.now(), early.time||0)/step)*step); }
+  const dateVal = localDateStr(dt);            // local date (toISOString would give the UTC day)
+  const timeVal = localTimeStr(dt);
+  const restNote = early.because
+    ? `<div class="helptext">${ICONS.calendar} Players are free from <b>${esc(fmtDateTime(new Date(early.time).toISOString()))}</b>: ${restMinutesAfter(early.because)} min rest after their match ${esc(entryName(entryById(early.because.entry1Id)))} vs ${esc(entryName(entryById(early.because.entry2Id)))}.</div>`
+    : `<div class="helptext">Rest rule: at least ${MIN_REST_SINGLE} min between one-game matches, ${MIN_REST_MULTI} min after best of 3/5.</div>`;
   const body = `
     <div class="field"><label>Court</label><select id="fSchCourt">${courts.map(c=>`<option value="${c.id}" ${match.courtId===c.id?'selected':''}>${esc(c.name)}</option>`).join('') || '<option value="">No active courts</option>'}</select></div>
     <div class="field-row">
@@ -4996,7 +5083,7 @@ function openScheduleDialog(match){
       <div class="field"><label>Time</label><input type="time" id="fSchTime" value="${timeVal}"></div>
     </div>
     <div class="field"><label>Duration (min)</label><input type="number" id="fSchDur" value="${match.estDurationMin || (t?t.matchDurationMin:30)}"></div>
-    <div id="schConflictNote"></div>
+    <div id="schConflictNote">${restNote}</div>
   `;
   openDialog('Schedule match', body, stdFoot('btnSaveSchedule','Save'));
   document.getElementById('btnSaveSchedule').onclick = async ()=>{
@@ -5286,7 +5373,7 @@ document.addEventListener('click', async (e)=>{
     case 'btnMarkAllRead': for(const n of visibleNotifications().filter(n=>!n.read)) await Store.update('notifications', n.id, {read:true}); render(); return;
     case 'btnRole': state.roleMenuOpen=!state.roleMenuOpen; state.notifOpen=false; state.searchOpen=false; render(); return;
     case 'btnNewTournament': case 'btnNewTournamentHero': openTournamentDialog(); return;
-    case 'btnLoadDemo': await seedDemoData(); return;
+    case 'btnLoadDemo': await seedDemoData(); if(state.tournaments.length) goto('dashboard'); return;
     case 'btnResetAllData':
       if(await confirmDialog('Delete ALL tournaments, players, clubs, events, draws and results? This cannot be undone.', {okLabel:'Delete everything'})) await resetAllData();
       return;
@@ -5380,7 +5467,8 @@ document.addEventListener('click', async (e)=>{
       const patch = {
         numCourts: parseInt(document.getElementById('setNumCourts').value,10)||t.numCourts,
         matchDurationMin: parseInt(document.getElementById('setMatchDur').value,10)||t.matchDurationMin,
-        restTimeMin: parseInt(document.getElementById('setRestTime').value,10)||t.restTimeMin,
+        restSingleMin: Math.max(MIN_REST_SINGLE, parseInt(document.getElementById('setRestSingle').value,10)||MIN_REST_SINGLE),
+        restMultiMin: Math.max(MIN_REST_MULTI, parseInt(document.getElementById('setRestMulti').value,10)||MIN_REST_MULTI),
         status: document.getElementById('setStatus').value
       };
       await updateTournament(t.id, patch); await audit(t.id, state.role, 'config_changed', 'Tournament logistics/status updated.'); toast('Saved'); render(); return;
