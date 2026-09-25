@@ -839,6 +839,9 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 /* Live-sharing defaults. Empty here; scripts/build_web.py fills them from
    sharing/share-config.json so an App Store build works without setup. */
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
+/* Build stamp: scripts/build_web.py writes the same id into the app and into the
+   viewer page, so the app can tell when the viewer page on GitHub is out of date. */
+const APP_BUILD = '20260925.163955';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -1007,6 +1010,35 @@ const SHARE_MAX_BYTES = 1024*1024;   // largest tournament a link can hold
 function shareBytes(snap){ const j = typeof snap==='string' ? snap : JSON.stringify(snap); try{ return new TextEncoder().encode(j).length; }catch(e){ return j.length; } }
 function shareExpiryDate(at){ if(!at) return null; const d=new Date(at); if(isNaN(d)) return null; d.setDate(d.getDate()+SHARE_KEEP_DAYS); return d; }
 function isShareLive(t){ return !!(t && t.share && t.share.id && t.share.key && !t.share.expired); }
+/* Is the viewer page that links open (e.g. on GitHub Pages) the same version as this app?
+   Only checked from the iPhone app, which can read other sites; cached per session. */
+const ViewerPageCheck = { result:null, running:false,
+  async run(force){
+    const cfg = shareConfig();
+    if(APP_BUILD==='dev' || VIEWER || !cfg.viewerUrl || !Native.has('sbFetch')) return null;
+    if(this.running || (this.result && !force)) return this.result;
+    this.running = true;
+    try{
+      const url = cfg.viewerUrl.replace(/#.*$/,'') + (cfg.viewerUrl.includes('?')?'&':'?') + 'v=' + Date.now();
+      const r = await window.webkit.messageHandlers.sbFetch.postMessage({url, method:'GET', headers:{'Cache-Control':'no-cache'}});
+      if(!r || r.error || !r.ok){ this.result = {state:'unreachable', detail: r && (r.error || ('HTTP '+r.status))}; }
+      else {
+        const m = /const APP_BUILD = '([^']*)';/.exec(r.text||'');
+        const theirs = m ? m[1] : null;
+        this.result = theirs===APP_BUILD ? {state:'current'} : {state:'outdated', theirs};
+      }
+    }catch(e){ this.result = {state:'unreachable', detail: e && e.message}; }
+    finally{ this.running = false; }
+    ShareUI.redraw(); const card=document.getElementById('viewerPageStatus'); if(card) card.outerHTML = viewerPageStatusHtml();
+    return this.result;
+  }
+};
+function viewerPageStatusHtml(){
+  const r = ViewerPageCheck.result;
+  if(!r || r.state==='current') return '<div id="viewerPageStatus"></div>';
+  if(r.state==='outdated') return `<div id="viewerPageStatus" class="reg-banner closed" style="margin:10px 0">${ICONS.warn}<span><b>Your viewer page is out of date.</b> People opening a live link see an older version (without the latest fixes). Upload <b>sharing/viewer-site/index.html</b> from the ShuttleBracket-iOS folder to your GitHub repository again.</span></div>`;
+  return `<div id="viewerPageStatus" class="helptext" style="margin:8px 0">Couldn't check the viewer page${r.detail?' ('+esc(r.detail)+')':''}. Make sure the Viewer page address opens in a browser.</div>`;
+}
 function randomToken(len){
   const abc='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   const buf=new Uint8Array(len); crypto.getRandomValues(buf);
@@ -1223,6 +1255,7 @@ const ShareUI = (function(){
       </div>
       <div class="share-status" id="shareStatus">${statusLine(t)}</div>
       <div class="helptext share-expiry" id="shareExpiry">${expiryLine(t)}</div>
+      ${viewerPageStatusHtml()}
       <div class="share-qr">${QR.svg(link, 220)}<div class="helptext">Scan to open. Print it or show it at the venue.</div></div>`;
   }
   function foot(t){
@@ -1235,6 +1268,7 @@ const ShareUI = (function(){
   function open(t){
     openTid = t.id;
     openDialog('Share live link', body(t), foot(t));
+    ViewerPageCheck.run();
     const dlg = document.getElementById('dlgGeneric');
     dlg.addEventListener('close', ()=>{ openTid=null; }, {once:true});
   }
@@ -4415,6 +4449,7 @@ function renderReportsView(){
 
 /* ---------- GLOBAL: SETTINGS ---------- */
 function renderShareSettingsCard(){
+  setTimeout(()=>ViewerPageCheck.run(), 0);
   const doc = state.settings.find(x=>x.id==='share') || {};
   const val = k => esc(doc[k]!=null && doc[k]!=='' ? doc[k] : (SHARE_DEFAULTS[k]||''));
   return `<div class="card" id="shareSettingsCard">
@@ -4429,6 +4464,7 @@ function renderShareSettingsCard(){
         <button class="btn btn-sm" id="btnTestShare">Test connection</button>
       </div>
       <div class="helptext" id="shareTestResult" style="margin-top:8px"></div>
+      ${viewerPageStatusHtml()}
     </div>`;
 }
 function renderDataSettingsCard(){
@@ -5540,6 +5576,7 @@ document.addEventListener('click', async (e)=>{
           + (nurl!==rawUrl ? ` <span class="sub-txt">(using ${esc(nurl)})</span>` : '')
           + ` <span class="sub-txt">${Math.round((Date.now()-t0))} ms</span>`;
         if(nurl!==rawUrl){ const el=document.getElementById('setShareUrl'); if(el) el.value = nurl; }
+        ViewerPageCheck.run(true);
       }catch(err){
         out.innerHTML = '<b style="color:var(--danger)">Not working yet:</b> ' + esc(ShareAPI.explain(err))
           + (nurl!==rawUrl ? ` <span class="sub-txt">(tried ${esc(nurl)})</span>` : '')
