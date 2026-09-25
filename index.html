@@ -9,33 +9,42 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
 <style>
   :root{
-    --bg:#f4f6f2; --surface:#ffffff; --surface-2:#eaeee5; --border:#dde3d7;
-    --ink:#12201b; --muted:#5c6f66; --faint:#8a9a91;
-    --court:#0e6e57; --court-ink:#ffffff; --court-soft:#e4f1ec;
-    --gold:#c8891a; --gold-soft:#faf0dc;
-    --danger:#b6402c; --danger-soft:#fbe9e5;
-    --live:#c8891a;
-    --shadow: 0 1px 2px rgba(18,32,27,.06), 0 8px 24px rgba(18,32,27,.06);
+    --bg:#f6f5fc; --surface:#ffffff; --surface-2:#eeecf8; --border:#e2dff0;
+    --ink:#17142e; --muted:#5f5b7a; --faint:#9a96b3;
+    --court:#5a3cf0; --court-ink:#ffffff; --court-soft:#ece8ff;
+    --accent2:#d43fd8; --grad:linear-gradient(135deg,#5a3cf0 0%,#8b4cf6 55%,#d43fd8 100%);
+    --gold:#f2643b; --gold-soft:#ffece5;
+    --danger:#d92d5c; --danger-soft:#fde7ee;
+    --win:#12a37f; --win-soft:#e1f6ef;
+    --live:#f2643b;
+    --shadow: 0 1px 2px rgba(35,24,90,.06), 0 10px 28px rgba(35,24,90,.08);
+    --glow: 0 6px 18px rgba(90,60,240,.28);
     --radius: 14px;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --bg:#0b1310; --surface:#121b17; --surface-2:#182620; --border:#25352c;
-      --ink:#eaf2ee; --muted:#93a89e; --faint:#5f7267;
-      --court:#33c79b; --court-ink:#06140f; --court-soft:#122a22;
-      --gold:#f0c14e; --gold-soft:#241d0e;
-      --danger:#ef7a67; --danger-soft:#2a1712;
-      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+      --bg:#0d0b1a; --surface:#171429; --surface-2:#201c37; --border:#2d2848;
+      --ink:#f2f0fb; --muted:#a8a3c6; --faint:#6e6990;
+      --court:#8f7dff; --court-ink:#0d0b1a; --court-soft:#241e4a;
+      --accent2:#ec6cf0; --grad:linear-gradient(135deg,#6d52ff 0%,#9a5cf7 55%,#e052e4 100%);
+      --gold:#ff8a5c; --gold-soft:#34201a;
+      --danger:#ff6b90; --danger-soft:#351725;
+      --win:#3ddbb0; --win-soft:#12302a;
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.4);
+      --glow: 0 6px 20px rgba(143,125,255,.3);
     }
   }
   :root[data-theme="dark"]{
-    --bg:#0b1310; --surface:#121b17; --surface-2:#182620; --border:#25352c;
-    --ink:#eaf2ee; --muted:#93a89e; --faint:#5f7267;
-    --court:#33c79b; --court-ink:#06140f; --court-soft:#122a22;
-    --gold:#f0c14e; --gold-soft:#241d0e;
-    --danger:#ef7a67; --danger-soft:#2a1712;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    --bg:#0d0b1a; --surface:#171429; --surface-2:#201c37; --border:#2d2848;
+    --ink:#f2f0fb; --muted:#a8a3c6; --faint:#6e6990;
+    --court:#8f7dff; --court-ink:#0d0b1a; --court-soft:#241e4a;
+    --accent2:#ec6cf0; --grad:linear-gradient(135deg,#6d52ff 0%,#9a5cf7 55%,#e052e4 100%);
+    --gold:#ff8a5c; --gold-soft:#34201a;
+    --danger:#ff6b90; --danger-soft:#351725;
+    --win:#3ddbb0; --win-soft:#12302a;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.4);
+    --glow: 0 6px 20px rgba(143,125,255,.3);
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -62,10 +71,10 @@
   /* ---------- top bar ---------- */
   .topbar{ display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; position:sticky; top:0; background:var(--bg); z-index:30; }
   .brand{ display:flex; align-items:center; gap:9px; flex:none; }
-  .brand-mark{ width:32px; height:32px; border-radius:9px; background:var(--court); color:var(--court-ink); display:flex; align-items:center; justify-content:center; flex:none; }
+  .brand-mark{ width:32px; height:32px; border-radius:10px; background:var(--grad); color:#fff; box-shadow:var(--glow); display:flex; align-items:center; justify-content:center; flex:none; }
   .brand-mark svg{ width:19px; height:19px; }
   .brand-name{ font-size:18px; line-height:1; }
-  .brand-name .accent{ color:var(--court); }
+  .brand-name .accent{ background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
   .topbar-spacer{ flex:1; min-width:6px; }
   .topbar-group{ display:flex; align-items:center; gap:6px; }
 
@@ -127,7 +136,7 @@
   .btn:hover{ border-color:var(--faint); }
   .btn:active{ transform:translateY(1px); }
   .btn svg{ width:15px; height:15px; flex:none; }
-  .btn-primary{ background:var(--court); border-color:var(--court); color:var(--court-ink); }
+  .btn-primary{ background:var(--grad); border-color:transparent; color:#fff; box-shadow:var(--glow); }
   .btn-primary:hover{ filter:brightness(1.08); }
   .btn-ghost{ background:transparent; border-color:transparent; padding:8px 10px; }
   .btn-danger{ color:var(--danger); }
@@ -180,7 +189,7 @@
 
   .tabs{ display:flex; flex-wrap:wrap; gap:4px; background:var(--surface-2); padding:4px; border-radius:11px; margin-bottom:16px; width:fit-content; max-width:100%; }
   .tab{ border:none; background:transparent; padding:8px 14px; border-radius:8px; font-weight:700; font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); cursor:pointer; white-space:nowrap; }
-  .tab.active{ background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+  .tab.active{ background:var(--surface); color:var(--court); box-shadow:var(--shadow); }
 
   .pill{ display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; background:var(--surface-2); color:var(--muted); white-space:nowrap; }
   .pill.gold{ background:var(--gold-soft); color:var(--gold); }
@@ -222,7 +231,7 @@
   .stat-tile{ border:1px solid var(--border); border-radius:12px; padding:12px 14px; background:var(--surface); }
   .stat-tile .stat-num{ font-size:24px; font-weight:700; line-height:1.1; }
   .stat-tile .stat-label{ color:var(--muted); font-size:11px; margin-top:3px; letter-spacing:.02em; }
-  .stat-tile.accent .stat-num{ color:var(--court); }
+  .stat-tile.accent .stat-num{ background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
   .stat-tile.gold .stat-num{ color:var(--gold); }
 
   .bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
@@ -332,7 +341,7 @@
 
   /* ---------- dialogs ---------- */
   dialog{ border:none; border-radius:16px; padding:0; background:var(--surface); color:var(--ink); box-shadow:0 20px 60px rgba(0,0,0,.25); width:min(480px,92vw); max-height:88vh; }
-  dialog::backdrop{ background:rgba(10,16,13,.5); backdrop-filter:blur(2px); }
+  dialog::backdrop{ background:rgba(16,10,40,.5); backdrop-filter:blur(3px); }
   .dlg-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--border); }
   .dlg-head h3{ font-size:16px; margin:0; text-transform:none; letter-spacing:0; font-family:"Public Sans"; font-weight:700; }
   .dlg-body{ padding:16px 18px; display:flex; flex-direction:column; gap:12px; max-height:64vh; overflow-y:auto; }
@@ -395,6 +404,42 @@
   .game-winner-note:empty{ display:none; }
   .game-winner-note.bad{ color:var(--danger) !important; }
   .score-summary.bad{ color:var(--danger); font-weight:700; }
+  .reg-banner{ display:flex; gap:8px; align-items:flex-start; border-radius:10px; padding:10px 12px; font-size:13px; margin-bottom:12px; }
+  .reg-banner svg{ width:16px; height:16px; flex:none; margin-top:1px; }
+  .reg-banner.open{ background:var(--court-soft); color:var(--ink); }
+  .reg-banner.closed{ background:var(--surface-2); color:var(--muted); }
+  .late-note{ display:flex; gap:6px; align-items:flex-start; margin:8px 0 0; color:var(--gold, #a86b00); }
+  .late-note svg{ width:14px; height:14px; flex:none; margin-top:2px; }
+  .list-row select{ border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:9px; padding:8px 10px; font-size:13px; font-family:inherit; max-width:100%; }
+  @media (max-width:700px){ .list-row.wrap select{ flex:1 1 100%; min-width:0 !important; } }
+  /* Live link: follow a player */
+  .follow-bar{ display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:8px 10px 8px 12px; margin:0 0 12px; box-shadow:var(--shadow); }
+  .follow-bar.on{ border-color:transparent; background:linear-gradient(var(--surface),var(--surface)) padding-box, var(--grad) border-box; border:2px solid transparent; }
+  .follow-bar .follow-ic{ width:30px; height:30px; border-radius:50%; background:var(--grad); color:#fff; display:flex; align-items:center; justify-content:center; flex:none; }
+  .follow-bar .follow-ic svg{ width:16px; height:16px; }
+  .follow-bar select{ flex:1; min-width:0; border:none; background:transparent; color:var(--ink); font:inherit; font-size:14px; font-weight:600; padding:6px 0; outline:none; }
+  .follow-note{ display:flex; align-items:center; gap:8px; background:var(--court-soft); color:var(--ink); border-radius:10px; padding:8px 10px; margin-bottom:12px; font-size:13px; }
+  .follow-note svg{ width:15px; height:15px; color:var(--court); flex:none; }
+  .follow-note span{ flex:1; min-width:0; }
+  tr.me-row td{ background:var(--court-soft); font-weight:700; }
+  tr.me-row td:first-child{ box-shadow:inset 3px 0 0 var(--court); }
+  .me-match{ outline:2px solid var(--court); outline-offset:1px; box-shadow:var(--glow) !important; }
+  .follow-hero{ background:var(--grad); color:#fff; border-radius:18px; padding:18px; margin-bottom:6px; box-shadow:var(--glow); }
+  .follow-hero .fh-name{ font-size:22px; font-weight:800; letter-spacing:-.01em; }
+  .follow-hero .fh-sub{ opacity:.85; font-size:13px; margin-top:2px; min-height:4px; }
+  .follow-hero .fh-stats{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:14px; }
+  .follow-hero .fh-stats div{ background:rgba(255,255,255,.16); border-radius:12px; padding:8px 6px; text-align:center; }
+  .follow-hero .fh-stats b{ display:block; font-size:17px; font-family:"JetBrains Mono",ui-monospace,monospace; }
+  .follow-hero .fh-stats span{ font-size:10.5px; opacity:.9; text-transform:uppercase; letter-spacing:.04em; }
+  .fm-row .wl{ width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex:none; }
+  .fm-row .wl svg{ width:15px; height:15px; }
+  .fm-row .wl.w{ background:var(--win-soft); color:var(--win); }
+  .fm-row .wl.l{ background:var(--danger-soft); color:var(--danger); }
+  .fm-row .wl.live{ background:var(--gold-soft); color:var(--gold); }
+  .fm-row .wl.next{ background:var(--court-soft); color:var(--court); }
+  .fm-row .fm-score{ font-weight:700; font-size:13px; text-align:right; flex:none; max-width:36%; line-height:1.35; }
+  .fm-row .fm-score span{ display:inline-block; white-space:nowrap; }
+  .dlg-section{ font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:14px 0 6px; padding-top:12px; border-top:1px solid var(--border); }
   .score-summary.won{ font-size:13px; color:var(--court); font-weight:700; }
 
   @media (max-width:520px){
@@ -1225,6 +1270,11 @@ const ViewerMode = (function(){
     COLS.forEach(c=>{ state[c] = c==='tournaments' ? (d.tournament?[d.tournament]:[]) : (d[c]||[]); });
     state.notifications=[]; state.auditLog=[]; state.settings=[];
     state.tid = d.tournament ? d.tournament.id : null;
+    if(state.followPlayerId === undefined){
+      let f=null; try{ f = localStorage.getItem('sb-follow-'+VIEWER.id); }catch(e){}
+      state.followPlayerId = (f && state.players.some(p=>p.id===f)) ? f : null;
+      if(state.followPlayerId) state.tab = 'follow';
+    }
     updatedAt = row.updated_at;
     state.viewerUpdatedAt = updatedAt; state.viewerError = null; state.viewerOffline = false;
     state.ready = true;
@@ -2031,7 +2081,7 @@ const state = {
   search:'', searchOpen:false, notifOpen:false, roleMenuOpen:false,
   filters:{}, regDraft:{}
 };
-try{ state.role = localStorage.getItem('sb-role') || 'admin'; }catch(e){}
+state.role = 'admin';   // the app has one user: the organiser. Players and spectators follow a tournament through its live link.
 try{ state.viewingPlayerId = localStorage.getItem('sb-viewer') || null; }catch(e){}
 
 /* Modal dialogs live in the browser's "top layer", above everything else on the
@@ -2056,6 +2106,40 @@ function toast(msg, isError){
 }
 
 function currentTournament(){ return state.tournaments.find(t=>t.id===state.tid) || null; }
+
+/* ---------- Registration window ----------
+   A tournament takes self-registrations while its status is "registration open"
+   and its deadline (regCloseDate, optional) hasn't passed. After that only an
+   admin can add players (recorded as late entries). */
+function regDeadline(t){
+  const v = t && t.regCloseDate; if(!v) return null;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(v+'T23:59:59') : new Date(v);   // date-only = end of that day
+  return isNaN(d) ? null : d;
+}
+function registrationInfo(t){
+  if(!t) return {open:false, reason:'none'};
+  const deadline = regDeadline(t);
+  if(t.status!=='registration_open') return {open:false, deadline, reason:'status'};
+  if(deadline && Date.now() > deadline.getTime()) return {open:false, deadline, reason:'deadline'};
+  return {open:true, deadline};
+}
+function fmtDeadline(d){ return d ? fmtDateTime(d.toISOString()) : ''; }
+/* Status pill that knows about the deadline: "Registration open until 5 Oct" /
+   "Registration closed" instead of a stale "registration open". */
+function tournamentStatusPill(t, withTime, bare){
+  if(t && t.status==='registration_open'){
+    const ri = registrationInfo(t);
+    if(ri.open) return `<span class="pill court">Registration open${ri.deadline && !bare?' until '+esc(withTime?fmtDeadline(ri.deadline):fmtDate(ri.deadline.toISOString())):''}</span>`;
+    return `<span class="pill">Registration closed</span>`;
+  }
+  return statusPill(t ? t.status : '');
+}
+function lateEntryNote(t){
+  const ri = registrationInfo(t);
+  if(ri.open) return '';
+  const why = ri.reason==='deadline' ? 'The registration deadline ('+fmtDeadline(ri.deadline)+') has passed' : 'Registration isn\'t open for this tournament';
+  return `<div class="helptext late-note">${ICONS.warn}<span>${esc(why)}. As admin you can still add players; they're recorded as late entries.</span></div>`;
+}
 function tEvents(tid){ return state.events.filter(e=>e.tournamentId===tid); }
 function tMatches(tid){ return state.matches.filter(m=>m.tournamentId===tid); }
 function tEntries(tid){ const evIds=new Set(tEvents(tid).map(e=>e.id)); return state.entries.filter(e=>evIds.has(e.eventId)); }
@@ -2082,6 +2166,22 @@ function entryName(entry){
 function entryPlayerIds(entry){ if(!entry) return []; return [entry.player1Id, entry.player2Id].filter(Boolean); }
 function matchEntryPlayerIds(m){
   return [...entryPlayerIds(entryById(m.entry1Id)), ...entryPlayerIds(entryById(m.entry2Id))];
+}
+/* Live link only: a viewer can follow one player (usually themselves). Their
+   choice is remembered in their own browser for that link. */
+function followedPlayer(){ return (VIEWER && state.followPlayerId) ? playerById(state.followPlayerId) : null; }
+function matchHasPlayer(m, pid){ return matchEntryPlayerIds(m).includes(pid); }
+function setFollow(pid){
+  state.followPlayerId = pid || null;
+  try{ if(pid) localStorage.setItem('sb-follow-'+VIEWER.id, pid); else localStorage.removeItem('sb-follow-'+VIEWER.id); }catch(e){}
+  state.tab = pid ? 'follow' : 'overview';
+  const p = followedPlayer();
+  if(p){ const ev = state.events.find(e=>state.entries.some(en=>en.eventId===e.id && entryPlayerIds(en).includes(p.id)) && eventDraw(e.id)); if(ev) state.filters.drawEventId = ev.id; }
+  render(); window.scrollTo(0,0);
+}
+function followNote(){
+  const p = followedPlayer(); if(!p) return '';
+  return `<div class="follow-note">${ICONS.user}<span>Showing <b>${esc(p.name)}</b> only</span><button type="button" class="btn btn-sm" id="btnUnfollow">Show everyone</button></div>`;
 }
 function scoringFor(event, tournament){
   if(event && event.drawFormat==='americano'){
@@ -2332,7 +2432,7 @@ async function createTournament(data){
       organizer:data.organizer||'', venue:data.venue||'', address:data.address||'',
       startDate:data.startDate||'', endDate:data.endDate||data.startDate||'',
       regOpenDate:data.regOpenDate||'', regCloseDate:data.regCloseDate||'',
-      status:'draft', maxParticipants:data.maxParticipants||0, entryFee:data.entryFee||0,
+      status:data.status||'draft', maxParticipants:data.maxParticipants||0, entryFee:data.entryFee||0,
       numCourts:data.numCourts||4, matchDurationMin:data.matchDurationMin||30, restTimeMin:data.restTimeMin||20,
       scoring:{...DEFAULT_SCORING}, seedingRules:'ranking', defaultDrawFormat:'single_elimination'
     });
@@ -2396,6 +2496,11 @@ function findDuplicateRegistration(eventId, playerId){
 }
 async function registerForEvent(tournamentId, eventId, playerId, partnerId){
   if(!playerId){ toast('Pick a player profile first', true); return; }
+  const ri = registrationInfo(tournamentById(tournamentId));
+  if(!ri.open){
+    toast(ri.reason==='deadline' ? 'Registration closed on '+fmtDeadline(ri.deadline)+'. Only the organiser can add late entries.' : 'Registration isn\'t open for this tournament.', true);
+    return;
+  }
   if(partnerId && partnerId===playerId){ toast('A pair cannot be the same player twice', true); return; }
   if(findDuplicateRegistration(eventId, playerId)){ toast('Already registered for this event', true); return; }
   if(partnerId && findDuplicateRegistration(eventId, partnerId)){ toast('Partner is already registered for this event', true); return; }
@@ -2414,8 +2519,10 @@ async function adminRegisterPlayer(tournamentId, eventId, playerId, partnerId){
   if(findDuplicateRegistration(eventId, playerId)){ toast('That player is already registered for this event', true); return; }
   if(partnerId && findDuplicateRegistration(eventId, partnerId)){ toast('That partner is already registered for this event', true); return; }
   return act(async ()=>{
-    const id = await Store.add('registrations', {tournamentId, eventId, playerId, partnerId:partnerId||null, status:'confirmed', registeredAt: nowIso()});
+    const late = !registrationInfo(tournamentById(tournamentId)).open;
+    const id = await Store.add('registrations', {tournamentId, eventId, playerId, partnerId:partnerId||null, status:'confirmed', registeredAt: nowIso(), lateEntry: late});
     await notify(tournamentId, playerId, 'registration_confirmed', 'Registered for ' + (eventById(eventId)||{}).name + ' by the tournament admin.');
+    if(late) await audit(tournamentId, 'admin', 'late_registration', (playerById(playerId)||{}).name + ' added to ' + (eventById(eventId)||{}).name + ' after registration closed.');
     return id;
   }, 'Player registered');
 }
@@ -2954,6 +3061,29 @@ async function seedDemoData(){
 
     await simulateDemoResults(tid, evMS.id, evWS.id, evMD.id, evXD.id, courtIds);
 
+    /* A second, upcoming tournament that is still taking registrations, so the
+       player "Tournaments" page and the registration deadline have something to show. */
+    const soon = d => { const x=new Date(); x.setDate(x.getDate()+d); return x; };
+    const deadline = soon(10); deadline.setHours(23,59,0,0);
+    const tid2 = await Store.add('tournaments', {
+      name:'Winter Open', description:'Open tournament for all clubs. Singles, mixed doubles and an Americano night.',
+      logoUrl:'', organizer:'Riverside BC', venue:'Oakwood Sports Centre', address:'',
+      startDate:localDateStr(soon(17)), endDate:localDateStr(soon(18)), regOpenDate:'', regCloseDate:deadline.toISOString(),
+      status:'registration_open', maxParticipants:64, entryFee:20, numCourts:4, matchDurationMin:30, restTimeMin:20,
+      scoring:{...DEFAULT_SCORING}, seedingRules:'ranking', defaultDrawFormat:'single_elimination'
+    });
+    for(let i=1;i<=4;i++) await Store.add('courts', {tournamentId:tid2, name:'Court '+i, active:true});
+    const w2 = async (name, type, drawFormat, scoringOverride)=> Store.add('events', {tournamentId:tid2, name, type, ageGroup:'none', maxParticipants:32,
+      drawFormat, thirdPlaceMatch:false, scoringOverride:scoringOverride||null, americanoVariant:'classic', status:'registration_open'});
+    const w2MS = await w2("Men's Singles", 'singles', 'single_elimination');
+    const w2WS = await w2("Women's Singles", 'singles', 'single_elimination');
+    const w2XD = await w2('Mixed Doubles', 'mixed_doubles', 'round_robin');
+    await w2('Americano Night', 'doubles', 'americano', AMERICANO_DEFAULT_SCORING);
+    const reg2 = (eid,pid,partnerId,status)=> Store.add('registrations', {tournamentId:tid2, eventId:eid, playerId:pid, partnerId:partnerId||null, status:status||'pending', registeredAt: nowIso()});
+    for(let i=2;i<6;i++) await reg2(w2MS, men[i], null, i%2?'confirmed':'pending');
+    for(let i=2;i<5;i++) await reg2(w2WS, women[i], null, 'confirmed');
+    await reg2(w2XD, men[6], women[6], 'pending');
+
     await notify(tid, null, 'draw_published', 'Draws are live for all four events.');
     await notify(tid, null, 'registration_confirmed', 'Registration window is now closed.');
     if(playerIds[0]) await notify(tid, playerIds[0], 'match_scheduled', 'Your next match has been scheduled - check My Matches.');
@@ -3031,7 +3161,7 @@ async function simulateDemoResults(tid, msId, wsId, mdId, xdId, courtIds){
 /* ============================== NAV / ROUTER ============================== */
 const NAV = {
   admin:  [['dashboard','Dashboard'],['tournaments','Tournaments'],['players','Players'],['rankings','Rankings'],['reports','Reports'],['settings','Settings']],
-  player: [['home','Home'],['mytournaments','My Tournaments'],['mymatches','My Matches'],['schedule','Schedule'],['results','Results'],['rankings','Rankings'],['profile','Profile']],
+  player: [['home','Home'],['tournaments','Tournaments'],['mytournaments','My Tournaments'],['mymatches','My Matches'],['schedule','Schedule'],['results','Results'],['rankings','Rankings'],['profile','Profile']],
   public: [['tournaments','Tournaments'],['live','Live'],['schedule','Schedule'],['draws','Draws'],['results','Results'],['players','Players']]
 };
 const ROLE_DEFAULT_VIEW = {admin:'dashboard', player:'home', public:'tournaments'};
@@ -3039,13 +3169,13 @@ const ROLE_DEFAULT_VIEW = {admin:'dashboard', player:'home', public:'tournaments
    "More" (everything else, the role switcher and appearance). */
 const MOBILE_TABS = {
   admin:  [['dashboard','Home','home'],['tournaments','Tournaments','trophy'],['players','Players','users'],['rankings','Rankings','chart'],['more','More','more']],
-  player: [['home','Home','home'],['mymatches','Matches','court'],['schedule','Schedule','calendar'],['results','Results','trophy'],['more','More','more']],
+  player: [['home','Home','home'],['tournaments','Tournaments','trophy'],['mymatches','Matches','court'],['results','Results','list'],['more','More','more']],
   public: [['tournaments','Tournaments','trophy'],['live','Live','bolt'],['schedule','Schedule','calendar'],['results','Results','list'],['more','More','more']]
 };
 function mobileTabFor(view){
   const tabs = MOBILE_TABS[state.role];
   if(tabs.some(t=>t[0]===view)) return view;
-  if(view==='tdetail') return state.role==='player' ? 'more' : 'tournaments';
+  if(view==='tdetail') return 'tournaments';
   return 'more';
 }
 function renderTabBar(){
@@ -3056,17 +3186,11 @@ function renderTabBar(){
 function renderMoreView(){
   const inTabs = new Set(MOBILE_TABS[state.role].map(t=>t[0]));
   const extra = NAV[state.role].filter(([k])=>!inTabs.has(k));
-  const moreIcons = {reports:'print', settings:'edit', mytournaments:'trophy', rankings:'chart', profile:'user', draws:'list', players:'users'};
+  const moreIcons = {reports:'print', settings:'edit', mytournaments:'trophy', rankings:'chart', profile:'user', draws:'list', players:'users', schedule:'calendar', mymatches:'court', results:'list'};
   const players = state.players.slice().sort((a,b)=>a.name.localeCompare(b.name));
   let pref='auto'; try{ pref = localStorage.getItem('sb-theme') || 'auto'; }catch(e){}
   return `<div class="t-header"><div><h2>More</h2></div></div>
     ${extra.length?`<div class="more-list">${extra.map(([k,label])=>`<button class="more-item" data-nav="${k}"><span class="more-ic">${ICONS[moreIcons[k]]||ICONS.list}</span><span class="grow">${esc(label)}</span>${ICONS.chevRight}</button>`).join('')}</div>`:''}
-    <div class="more-h">Viewing as</div>
-    <div class="more-list">
-      ${[['admin','Admin','Organiser: create tournaments, draws and scores'],['player','Player','See your own matches and register'],['public','Public','Read-only: live scores, draws and results']].map(([r,label,sub])=>
-        `<button class="more-item ${state.role===r?'active':''}" data-role="${r}"><span class="grow"><span class="main-txt">${label}</span><span class="sub-txt">${sub}</span></span>${state.role===r?ICONS.check:''}</button>`).join('')}
-      ${state.role==='player'?`<div class="more-pad"><select id="selViewingPlayer"><option value="">Choose player profile&hellip;</option>${players.map(p=>`<option value="${p.id}" ${state.viewingPlayerId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>`:''}
-    </div>
     <div class="more-h">Appearance</div>
     <div class="seg">${[['light','Light','sun'],['auto','Automatic','auto'],['dark','Dark','moon']].map(([v,l,ic])=>`<button class="${pref===v?'active':''}" data-theme="${v}">${ICONS[ic]}<span>${l}</span></button>`).join('')}</div>`;
 }
@@ -3157,9 +3281,7 @@ function shellHtml(){
           <button class="icon-toggle-btn" id="btnBell" title="Notifications">${ICONS.bell}${unreadNotifCount()?`<span class="badge-dot">${unreadNotifCount()>9?'9+':unreadNotifCount()}</span>`:''}</button>
           ${renderNotifPanel()}
         </div>
-        <div class="role-switch">
-          ${renderRoleButton()}
-          ${renderRoleMenu()}
+        <div class="role-switch" hidden>
         </div>
         <div class="theme-toggle" id="themeToggle">
           <button data-theme="light" title="Light">${ICONS.sun}</button>
@@ -3296,7 +3418,7 @@ function renderTournamentSidebar(){
     ${list.length ? `<ul class="t-list">${list.map(t=>`
       <li class="t-item ${state.tid===t.id?'active':''}"><button data-select-tournament="${t.id}">
         <span class="t-name">${esc(t.name)}</span>
-        <span class="t-meta">${esc(fmtDate(t.startDate))} ${statusPill(t.status)}</span>
+        <span class="t-meta">${esc(fmtDate(t.startDate))} ${tournamentStatusPill(t, false, true)}</span>
       </button></li>`).join('')}</ul>` : `<p class="empty-note">${state.role==='admin'?'No tournaments yet. Tap + to create one, or load demo data from the Dashboard.':'Nothing published yet.'}</p>`}`;
 }
 
@@ -3339,12 +3461,41 @@ function renderTournamentCard(t){
   return `<div class="cat-card" data-select-tournament="${t.id}">
     ${state.role==='admin'?`<button class="icon-btn cat-del btn-danger" data-delete-tournament-card="${t.id}" title="Delete tournament">${ICONS.trash}</button>`:''}
     <h3>${esc(t.name)}</h3>
-    <div class="cat-meta">${statusPill(t.status)}<span class="pill">${esc(fmtDate(t.startDate))}</span><span class="pill">${evs} events</span><span class="pill">${pl} players</span></div>
+    <div class="cat-meta">${tournamentStatusPill(t)}<span class="pill">${esc(fmtDate(t.startDate))}</span><span class="pill">${evs} events</span><span class="pill">${pl} players</span></div>
   </div>`;
 }
 
 /* ---------- TOURNAMENTS LIST ---------- */
+/* Players and the public see every published tournament, grouped by what they
+   can do with it: register now, follow it, or look back at results. */
+function renderBrowseTournaments(){
+  const list = visibleTournaments();
+  const me = state.role==='player' ? myPlayer() : null;
+  const myTids = new Set(me ? state.registrations.filter(r=>(r.playerId===me.id || r.partnerId===me.id) && !['withdrawn','rejected'].includes(r.status)).map(r=>r.tournamentId) : []);
+  const byStart = (a,b)=>(a.startDate||'').localeCompare(b.startDate||'');
+  const open = list.filter(t=>registrationInfo(t).open)
+    .sort((a,b)=>((regDeadline(a)||new Date(8.64e15)) - (regDeadline(b)||new Date(8.64e15))) || byStart(a,b));
+  const running = list.filter(t=>!registrationInfo(t).open && !['completed','cancelled'].includes(t.status)).sort(byStart);
+  const finished = list.filter(t=>['completed','cancelled'].includes(t.status)).sort((a,b)=>byStart(b,a));
+  const card = t=>{
+    const ri = registrationInfo(t), mine = myTids.has(t.id);
+    return `<div class="cat-card" data-select-tournament="${t.id}">
+      <h3>${esc(t.name)}</h3>
+      <div class="cat-meta">${tournamentStatusPill(t, false, true)}${t.startDate?`<span class="pill">${esc(fmtDate(t.startDate))}</span>`:''}${t.venue?`<span class="pill">${esc(t.venue)}</span>`:''}${mine?`<span class="pill gold">${ICONS.check} Registered</span>`:''}</div>
+      ${ri.open && ri.deadline ? `<div class="sub-txt" style="margin-top:8px">Register by <b>${esc(fmtDeadline(ri.deadline))}</b></div>` : ''}
+      ${state.role==='player' && ri.open ? `<div style="margin-top:10px"><button class="btn btn-primary btn-sm" data-open-tournament="${t.id}" data-open-tab="register">${mine?'Manage registration':'Register'}</button></div>` : ''}
+    </div>`;
+  };
+  const section = (title, arr, empty)=> `<div class="section-h"><h3>${title}</h3></div>${arr.length?`<div class="cat-grid">${arr.map(card).join('')}</div>`:`<div class="empty-tab">${empty}</div>`}`;
+  return `
+    <div class="t-header"><div><h2>Tournaments</h2><div class="t-sub">${list.length} tournament${list.length===1?'':'s'}</div></div></div>
+    ${section('Open for registration', open, 'No tournament is taking registrations right now.')}
+    ${section('Upcoming and in progress', running, 'Nothing running at the moment.')}
+    ${finished.length ? section('Finished', finished, '') : ''}
+  `;
+}
 function renderTournamentsList(){
+  if(state.role!=='admin') return renderBrowseTournaments();
   const list = visibleTournaments();
   return `
     <div class="t-header"><div><h2>Tournaments</h2><div class="t-sub">${list.length} tournament${list.length===1?'':'s'}</div></div>
@@ -3359,18 +3510,21 @@ function tabsForRole(){
   if(state.role==='admin') return [['overview','Overview'],['events','Events'],['players','Players'],['draws','Draws'],['matches','Matches'],['schedule','Schedule'],['courts','Courts'],['results','Results']];
   if(state.role==='player') return [['overview','Overview'],['mymatches','My Matches'],['draws','Draws'],['results','Results'],['register','Register']];
   const pub = [['overview','Overview'],['live','Live'],['schedule','Schedule'],['draws','Draws'],['results','Results'],['players','Players']];
-  return VIEWER ? pub.concat([['rankings','Rankings']]) : pub;
+  if(!VIEWER) return pub;
+  const tabs = pub.concat([['rankings','Rankings']]);
+  if(followedPlayer()) tabs.splice(1, 0, ['follow', 'My games']);
+  return tabs;
 }
 function renderTournamentDetail(){
   const t = currentTournament();
   if(!t) return `<div class="empty-tab">Select a tournament from the sidebar, or <button class="btn btn-sm" id="btnGoTournaments" style="margin-left:6px">browse tournaments</button>.</div>`;
   const tabs = tabsForRole();
   if(!tabs.find(x=>x[0]===state.tab)) state.tab = tabs[0][0];
-  const backView = state.role==='player' ? 'mytournaments' : 'tournaments';
+  const backView = 'tournaments';
   return `
     ${VIEWER?'':`<button class="back-link mobile-only" data-nav="${backView}">${ICONS.back} Tournaments</button>`}
     <div class="t-header">
-      <div><h2>${esc(t.name)}</h2><div class="t-sub">${esc(fmtDate(t.startDate))}${t.venue?' &middot; '+esc(t.venue):''} ${statusPill(t.status)}${!VIEWER && isShareLive(t)?` <span class="pill court" title="Anyone with the link can follow this tournament">${ICONS.link} Live link on</span>`:''}${!VIEWER && t.share && t.share.expired && state.role==='admin'?` <span class="pill" title="Not changed for ${SHARE_KEEP_DAYS} days, so the link was removed">${ICONS.link} Link expired</span>`:''}</div></div>
+      <div><h2>${esc(t.name)}</h2><div class="t-sub">${esc(fmtDate(t.startDate))}${t.venue?' &middot; '+esc(t.venue):''} ${tournamentStatusPill(t, true)}${!VIEWER && isShareLive(t)?` <span class="pill court" title="Anyone with the link can follow this tournament">${ICONS.link} Live link on</span>`:''}${!VIEWER && t.share && t.share.expired && state.role==='admin'?` <span class="pill" title="Not changed for ${SHARE_KEEP_DAYS} days, so the link was removed">${ICONS.link} Link expired</span>`:''}</div></div>
       ${state.role==='admin' ? `<div class="t-actions">
         <button class="btn btn-sm" id="btnShareTournament">${ICONS.share} Share</button>
         <button class="btn btn-primary btn-sm" id="btnRegisterPlayerHeader">${ICONS.plus} Register player</button>
@@ -3378,6 +3532,7 @@ function renderTournamentDetail(){
         <button class="btn btn-danger btn-sm" id="btnDeleteTournament">${ICONS.trash} Delete</button>
       </div>` : (!VIEWER && isShareLive(t) ? `<div class="t-actions"><button class="btn btn-sm" id="btnShareTournament">${ICONS.share} Share</button></div>` : '')}
     </div>
+    ${VIEWER ? renderFollowBar() : ''}
     <div class="tabs">${tabs.map(([k,label])=>`<button class="tab ${state.tab===k?'active':''}" data-tab="${k}">${esc(label)}</button>`).join('')}</div>
     <div id="tabBody">${renderTabBody(t)}</div>
   `;
@@ -3385,6 +3540,7 @@ function renderTournamentDetail(){
 function renderTabBody(t){
   switch(state.tab){
     case 'overview': return renderOverviewTab(t);
+    case 'follow': return renderFollowTab(t);
     case 'events': return renderEventsTab(t);
     case 'draws': return renderDrawsTab(t);
     case 'matches': return renderMatchesTab(t);
@@ -3660,7 +3816,7 @@ function renderBracketForEvent(ev, editable){
 function renderAmericanoStandingsTable(rows){
   if(!rows.length) return `<div class="empty-tab">No players.</div>`;
   return `<div class="table-scroll"><table class="standings"><thead><tr><th>#</th><th>Player</th><th class="num">P</th><th class="num">W-L</th><th class="num">Points</th></tr></thead>
-  <tbody>${rows.map((r,i)=>`<tr class="rank-${i+1}"><td class="rk mono">${i+1}</td><td>${esc(playerName(r.playerId))}</td><td class="num mono">${r.played}</td><td class="num mono">${r.wins}-${r.losses}</td>
+  <tbody>${rows.map((r,i)=>`<tr class="rank-${i+1} ${followedPlayer() && r.playerId===followedPlayer().id?'me-row':''}"><td class="rk mono">${i+1}</td><td>${esc(playerName(r.playerId))}</td><td class="num mono">${r.played}</td><td class="num mono">${r.wins}-${r.losses}</td>
     <td class="num mono">${r.pointsFor}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function renderDrawsTab(t){
@@ -3714,6 +3870,7 @@ function applyMatchFilters(matches, f){
     if(f.courtId && m.courtId!==f.courtId) return false;
     if(f.status && m.status!==f.status) return false;
     if(f.date && (!m.scheduledStart || m.scheduledStart.slice(0,10)!==f.date)) return false;
+    if(VIEWER && state.followPlayerId && !matchHasPlayer(m, state.followPlayerId)) return false;
     if(f.player){
       const q=f.player.toLowerCase();
       const names = matchEntryPlayerIds(m).map(pid=>playerName(pid).toLowerCase());
@@ -3776,7 +3933,8 @@ function renderScheduleTab(t){
   const grid = {};
   matches.forEach(m=>{ (grid[m.scheduledStart]=grid[m.scheduledStart]||{})[m.courtId]=m; });
   return `
-    ${renderFilterBar(t,'schedule',{status:false})}
+    ${followNote()}
+    ${VIEWER && followedPlayer() ? '' : renderFilterBar(t,'schedule',{status:false})}
     <div class="export-row no-print"><button class="btn btn-sm" id="btnExportCourtSchedule">${ICONS.download} Export CSV</button><button class="btn btn-sm" id="btnPrintSchedule">${ICONS.print} Print</button>
       ${state.role==='admin'?`<button class="btn btn-sm btn-primary" id="btnAssignAny">${ICONS.calendar} Schedule a match&hellip;</button>`:''}</div>
     ${!times.length ? `<div class="empty-tab">Nothing scheduled yet.</div>` : `
@@ -3820,8 +3978,9 @@ function renderCourtsTab(t){
 
 /* ---------- RESULTS TAB ---------- */
 function renderResultsTab(t){
-  const evs = tEvents(t.id);
-  return `
+  const fp = followedPlayer();
+  const evs = tEvents(t.id).filter(ev=> !fp || eventEntries(ev.id).some(en=>entryPlayerIds(en).includes(fp.id)));
+  return `${followNote()}
     <div class="export-row no-print"><button class="btn btn-sm" id="btnExportResultsMain">${ICONS.download} Export all results CSV</button><button class="btn btn-sm" id="btnPrintResults">${ICONS.print} Print</button></div>
     ${evs.map(ev=>renderEventResultsCard(ev)).join('') || `<div class="empty-tab">No events yet.</div>`}
   `;
@@ -3839,7 +3998,7 @@ function renderEventResultsCard(ev){
       ${podium.map(r=>`<span class="pill ${r.label==='Champion'?'gold':'court'}">${esc(r.label)}: ${esc(entryName(r.entry))}</span>`).join('') || '<span class="sub-txt">Still in progress.</span>'}
     </div>
     <div class="table-scroll"><table class="data-table"><thead><tr><th>Entry</th><th>Placement</th><th class="num">Points</th></tr></thead>
-    <tbody>${ranked.map(r=>`<tr><td>${esc(entryName(r.entry))}</td><td>${esc(r.label)}</td><td class="num mono">${r.points}</td></tr>`).join('')}</tbody></table></div>
+    <tbody>${ranked.map(r=>`<tr class="${followedPlayer() && entryPlayerIds(r.entry).includes(followedPlayer().id)?'me-row':''}"><td>${esc(entryName(r.entry))}</td><td>${esc(r.label)}</td><td class="num mono">${r.points}</td></tr>`).join('')}</tbody></table></div>
   </div>`;
 }
 
@@ -3847,24 +4006,33 @@ function renderEventResultsCard(ev){
 function renderRegisterTab(t){
   const me = myPlayer();
   if(!me) return `<div class="empty-tab">Pick a player profile from the role switcher (top right) to register.</div>`;
+  const ri = registrationInfo(t);
   const evs = tEvents(t.id).filter(e=> !['completed','cancelled'].includes(e.status));
-  const myRegs = state.registrations.filter(r=>r.playerId===me.id && r.tournamentId===t.id);
+  const myRegs = state.registrations.filter(r=>(r.playerId===me.id || r.partnerId===me.id) && r.tournamentId===t.id);
+  const banner = ri.open
+    ? `<div class="reg-banner open">${ICONS.check}<span>Registration is open${ri.deadline?` until <b>${esc(fmtDeadline(ri.deadline))}</b>`:''}.</span></div>`
+    : ri.reason==='deadline'
+      ? `<div class="reg-banner closed">${ICONS.warn}<span>Registration closed on <b>${esc(fmtDeadline(ri.deadline))}</b>. Only the organiser can add late entries or withdrawals now.</span></div>`
+      : `<div class="reg-banner closed">${ICONS.warn}<span>Registration isn't open for this tournament.</span></div>`;
   return `
+    ${banner}
     <div class="helptext" style="margin-bottom:10px">Registering as <strong>${esc(me.name)}</strong>.</div>
     ${evs.map(ev=>{
       const reg = myRegs.find(r=>r.eventId===ev.id && r.status!=='withdrawn' && r.status!=='rejected');
       const doubles = isDoublesType(ev.type);
       if(reg){
-        return `<div class="list-row"><span class="grow main-txt">${esc(ev.name)}</span>${regStatusPill(reg.status)}
-          ${reg.status!=='withdrawn'?`<button class="btn btn-sm btn-danger" data-withdraw-reg="${reg.id}">Withdraw</button>`:''}</div>`;
+        const partnerId = reg.playerId===me.id ? reg.partnerId : reg.playerId;
+        return `<div class="list-row"><span class="grow main-txt">${esc(ev.name)}${partnerId?` <span class="sub-txt">with ${esc((playerById(partnerId)||{}).name||'')}</span>`:''}</span>${regStatusPill(reg.status)}
+          ${ri.open && reg.playerId===me.id?`<button class="btn btn-sm btn-danger" data-withdraw-reg="${reg.id}">Withdraw</button>`:''}</div>`;
       }
+      if(!ri.open) return `<div class="list-row"><span class="grow main-txt">${esc(ev.name)} <span class="sub-txt">${esc(ev.type.replace(/_/g,' '))}</span></span><span class="pill">Closed</span></div>`;
       const otherPlayers = state.players.filter(p=>p.id!==me.id).sort((a,b)=>a.name.localeCompare(b.name));
       return `<div class="list-row wrap">
         <span class="grow main-txt">${esc(ev.name)} <span class="sub-txt">${esc(ev.type.replace(/_/g,' '))}</span></span>
         ${doubles?`<select data-partner-select="${ev.id}" style="min-width:160px"><option value="">Choose partner&hellip;</option>${otherPlayers.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>`:''}
         <button class="btn btn-sm btn-primary" data-register-event="${ev.id}">Register</button>
       </div>`;
-    }).join('') || `<div class="empty-tab">No open events right now.</div>`}
+    }).join('') || `<div class="empty-tab">No events to register for yet.</div>`}
   `;
 }
 function renderMyMatchesInTournamentTab(t){
@@ -3875,9 +4043,76 @@ function renderMyMatchesInTournamentTab(t){
   matches.sort((a,b)=>(a.scheduledStart||'9999').localeCompare(b.scheduledStart||'9999'));
   return matches.length ? matches.map(renderMatchListRow).join('') : `<div class="empty-tab">No matches yet for ${esc(me.name)} in this tournament.</div>`;
 }
+function renderFollowBar(){
+  const fp = followedPlayer();
+  const players = state.players.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  return `<div class="follow-bar no-print ${fp?'on':''}">
+    <span class="follow-ic">${ICONS.user}</span>
+    <select id="viewerFollow" aria-label="Follow a player">
+      <option value="">Follow a player: see their matches and scores</option>
+      ${players.map(p=>`<option value="${p.id}" ${fp&&fp.id===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
+    </select>
+  </div>`;
+}
+/* "My games": one player's day at a glance - live now, next up, results and standings. */
+function renderFollowTab(t){
+  const p = followedPlayer();
+  if(!p) return `<div class="empty-tab">Choose a player above to follow their matches.</div>`;
+  const ms = tMatches(t.id).filter(m=>m.entry1Id && m.entry2Id && matchHasPlayer(m, p.id));
+  const side = m => entryPlayerIds(entryById(m.entry1Id)).includes(p.id) ? 1 : 2;
+  const decided = ms.filter(m=>['completed','walkover','retired'].includes(m.status));
+  const live = ms.filter(m=>m.status==='in_progress');
+  const upcoming = ms.filter(m=>!['completed','walkover','retired','in_progress','bye','cancelled'].includes(m.status))
+    .sort((a,b)=>(a.scheduledStart||'9999').localeCompare(b.scheduledStart||'9999'));
+  const won = decided.filter(m=>m.winnerEntryId === (side(m)===1?m.entry1Id:m.entry2Id));
+  let pf=0, pa=0;
+  decided.concat(live).forEach(m=>(m.games||[]).forEach(g=>{ const mine = side(m)===1?g.a:g.b, theirs = side(m)===1?g.b:g.a; pf+=mine|0; pa+=theirs|0; }));
+  const club = clubById(p.clubId);
+  const opp = m => entryName(entryById(side(m)===1?m.entry2Id:m.entry1Id));
+  const partner = m => { const e = entryById(side(m)===1?m.entry1Id:m.entry2Id); const other = entryPlayerIds(e).find(x=>x!==p.id); return other ? playerName(other) : ''; };
+  const where = m => [m.scheduledStart?fmtDateTime(m.scheduledStart):'', (courtById(m.courtId)||{}).name||''].filter(Boolean).join(' · ');
+  const row = (m, kind)=>{
+    const s = side(m), score = (m.games||[]).map(g=>(s===1?g.a:g.b)+'-'+(s===1?g.b:g.a)).join(', ');
+    const w = kind==='done' && m.winnerEntryId === (s===1?m.entry1Id:m.entry2Id);
+    return `<div class="list-row fm-row ${kind==='live'?'live':''}" data-open-match="${m.id}">
+      ${kind==='done' ? `<span class="wl ${w?'w':'l'}">${w?'W':'L'}</span>` : kind==='live' ? `<span class="wl live">${ICONS.bolt}</span>` : `<span class="wl next">${ICONS.calendar}</span>`}
+      <span class="grow"><span class="main-txt">vs ${esc(opp(m))}</span>
+        <div class="sub-txt">${esc((eventById(m.eventId)||{}).name||'')}${partner(m)?' · with '+esc(partner(m)):''}${where(m)?' · '+esc(where(m)):''}</div></span>
+      ${score?`<span class="mono fm-score">${score.split(', ').map(g=>`<span>${esc(g)}</span>`).join(' ')}</span>`:''}
+    </div>`;
+  };
+  // standing in each event the player is in (individual entry for Americano)
+  const standings = tEvents(t.id).map(ev=>{
+    const en = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam).find(e=>entryPlayerIds(e).includes(p.id));
+    if(!en || !eventDraw(ev.id)) return null;
+    const pl = Object.assign({}, (computeEventPlacements(ev.id)||{})[en.id] || {});
+    const stillToPlay = ms.some(m=>m.eventId===ev.id && !['completed','walkover','retired','bye','cancelled'].includes(m.status));
+    if(!pl.label || (pl.label==='Did not play' && stillToPlay)) pl.label = stillToPlay ? 'Upcoming' : (pl.label||'In progress');
+    return `<div class="list-row"><span class="grow main-txt">${esc(ev.name)}</span><span class="pill ${pl.label==='Champion'?'gold':'court'}">${esc(pl.label||'In progress')}</span>${pl.points!=null?`<span class="mono sub-txt">${pl.points} pts</span>`:''}</div>`;
+  }).filter(Boolean);
+  return `
+    <div class="follow-hero">
+      <div class="fh-name">${esc(p.name)}</div>
+      <div class="fh-sub">${esc((club||{}).name||'')}</div>
+      <div class="fh-stats">
+        <div><b>${decided.length}</b><span>Played</span></div>
+        <div><b>${won.length}-${decided.length-won.length}</b><span>Won-lost</span></div>
+        <div><b>${pf}-${pa}</b><span>Points</span></div>
+        <div><b>${upcoming.length}</b><span>To play</span></div>
+      </div>
+    </div>
+    ${live.length ? `<div class="section-h"><h3>Playing now</h3></div>${live.map(m=>row(m,'live')).join('')}` : ''}
+    <div class="section-h"><h3>Next up</h3></div>
+    ${upcoming.length ? upcoming.map(m=>row(m,'next')).join('') : `<div class="empty-tab">No more matches scheduled.</div>`}
+    <div class="section-h"><h3>Results</h3></div>
+    ${decided.length ? decided.slice().sort((a,b)=>(b.actualEnd||b.updatedAt||'').localeCompare(a.actualEnd||a.updatedAt||'')).map(m=>row(m,'done')).join('') : `<div class="empty-tab">No results yet.</div>`}
+    ${standings.length ? `<div class="section-h"><h3>Standing</h3></div>${standings.join('')}` : ''}
+  `;
+}
 function renderLiveInTournamentTab(t){
-  const live = tMatches(t.id).filter(m=>m.status==='in_progress');
-  return live.length ? live.map(m=>renderPublicLiveCard(m)).join('') : `<div class="empty-tab">No matches live right now.</div>`;
+  const fp = followedPlayer();
+  const live = tMatches(t.id).filter(m=>m.status==='in_progress' && (!fp || matchHasPlayer(m, fp.id)));
+  return followNote() + (live.length ? live.map(m=>renderPublicLiveCard(m)).join('') : `<div class="empty-tab">${fp?esc(fp.name)+' isn\'t playing right now.':'No matches live right now.'}</div>`);
 }
 function renderPublicLiveCard(m){
   const ev = eventById(m.eventId), court = courtById(m.courtId);
@@ -3919,6 +4154,7 @@ function renderAdminTournamentPlayersTab(t){
     </div>
     ${evs.length ? `<div class="card" style="margin-bottom:14px">
       <div class="sub-txt" style="margin-bottom:6px;font-weight:700">Add a player to this tournament</div>
+      ${lateEntryNote(t)}
       <div class="row wrap" style="gap:8px">
         <select id="fTPlayerAddEvent" style="min-width:150px"><option value="">Choose event&hellip;</option>${evs.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
         <select id="fTPlayerAddPlayer" style="min-width:150px"><option value="">Choose player&hellip;</option>${allPlayersSorted.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
@@ -3988,7 +4224,7 @@ function renderRankingsView(){
       <select data-filter="rankings.clubId"><option value="">All clubs</option>${state.clubs.map(c=>`<option value="${c.id}" ${f.clubId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
     </div>
     <div class="table-scroll"><table class="standings"><thead><tr><th>#</th><th>Player</th><th class="num">Pts</th><th class="num">Titles</th><th class="num">W-L</th><th class="num">Win %</th>${VIEWER?'':'<th class="num">Tournaments</th>'}</tr></thead>
-    <tbody>${stats.map((s,i)=>`<tr class="rank-${i+1}"><td class="rk mono">${i+1}</td><td>${esc((s.player||{}).name||'Unknown')}</td><td class="num mono">${s.rankingPoints}</td>
+    <tbody>${stats.map((s,i)=>`<tr class="rank-${i+1} ${followedPlayer() && s.playerId===followedPlayer().id?'me-row':''}"><td class="rk mono">${i+1}</td><td>${esc((s.player||{}).name||'Unknown')}</td><td class="num mono">${s.rankingPoints}</td>
       <td class="num mono">${s.titles}</td><td class="num mono">${s.wins}-${s.losses}</td><td class="num mono">${s.winPct}%</td>${VIEWER?'':`<td class="num mono">${s.tournamentsCount}</td>`}</tr>`).join('') || `<tr><td colspan="7" class="empty-tab">No ranked players yet.</td></tr>`}
     </tbody></table></div>
   `;
@@ -4088,6 +4324,8 @@ function renderPlayerHome(){
   const upcoming = state.matches.filter(m=> (myEntryIds.has(m.entry1Id)||myEntryIds.has(m.entry2Id)) && m.scheduledStart && ['scheduled','called'].includes(m.status))
     .sort((a,b)=>a.scheduledStart.localeCompare(b.scheduledStart)).slice(0,5);
   const stats = computePlayerStats(s=>s.playerId===me.id)[0];
+  const regTids = new Set(myRegs.map(r=>r.tournamentId));
+  const openForMe = state.tournaments.filter(t=>registrationInfo(t).open && !regTids.has(t.id));
   return `
     <div class="t-header"><div><h2>Hi, ${esc(me.name)}</h2><div class="t-sub">${myRegs.length} active registration${myRegs.length===1?'':'s'}</div></div></div>
     <div class="stat-grid">
@@ -4099,7 +4337,9 @@ function renderPlayerHome(){
     <div class="section-h"><h3>Upcoming matches</h3></div>
     ${upcoming.length ? upcoming.map(renderMatchListRow).join('') : `<div class="empty-tab">Nothing scheduled yet.</div>`}
     <div class="section-h"><h3>My registrations</h3></div>
-    ${myRegs.length ? myRegs.map(r=>`<div class="list-row"><span class="grow main-txt">${esc((eventById(r.eventId)||{}).name||'')}</span><span class="sub-txt">${esc((tournamentById(r.tournamentId)||{}).name||'')}</span>${regStatusPill(r.status)}</div>`).join('') : `<div class="empty-tab">Not registered for anything yet - see My Tournaments.</div>`}
+    ${myRegs.length ? myRegs.map(r=>`<div class="list-row"><span class="grow main-txt">${esc((eventById(r.eventId)||{}).name||'')}</span><span class="sub-txt">${esc((tournamentById(r.tournamentId)||{}).name||'')}</span>${regStatusPill(r.status)}</div>`).join('') : `<div class="empty-tab">Not registered for anything yet - see Tournaments.</div>`}
+    ${openForMe.length ? `<div class="section-h"><h3>Open for registration</h3></div>
+      ${openForMe.map(t=>{ const ri=registrationInfo(t); return `<div class="list-row" data-select-tournament="${t.id}"><span class="grow"><span class="main-txt">${esc(t.name)}</span><div class="sub-txt">${esc(fmtDate(t.startDate))}${ri.deadline?' &middot; register by '+esc(fmtDeadline(ri.deadline)):''}</div></span><button class="btn btn-primary btn-sm" data-open-tournament="${t.id}" data-open-tab="register">Register</button></div>`; }).join('')}` : ''}
   `;
 }
 function renderChoosePlayerPrompt(){
@@ -4109,8 +4349,8 @@ function renderChoosePlayerPrompt(){
 function renderMyTournaments(){
   const me = myPlayer();
   if(!me) return renderChoosePlayerPrompt();
-  const myTids = new Set(state.registrations.filter(r=>r.playerId===me.id).map(r=>r.tournamentId));
-  const open = state.tournaments.filter(t=>t.status==='registration_open' && !myTids.has(t.id));
+  const myTids = new Set(state.registrations.filter(r=>r.playerId===me.id || r.partnerId===me.id).map(r=>r.tournamentId));
+  const open = state.tournaments.filter(t=>registrationInfo(t).open && !myTids.has(t.id));
   const mine = state.tournaments.filter(t=>myTids.has(t.id));
   return `
     <div class="t-header"><h2>My Tournaments</h2></div>
@@ -4348,8 +4588,11 @@ document.addEventListener('click', e=>{ if(e.target.matches && e.target.matches(
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && dpState.input) dpClose(); });
 
 /* ---------- DIALOG: TOURNAMENT ---------- */
+function localDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function localTimeStr(d){ return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 function openTournamentDialog(existing){
   const t = existing||{};
+  const dl = regDeadline(t);
   const body = `
     <div class="field"><label>Tournament name</label><input id="fTName" value="${esc(t.name||'')}" placeholder="Autumn Club Championships"></div>
     <div class="field"><label>Description</label><textarea id="fTDesc" rows="2">${esc(t.description||'')}</textarea></div>
@@ -4363,6 +4606,16 @@ function openTournamentDialog(existing){
       <div class="field"><label>Courts</label><input type="number" id="fTCourts" value="${t.numCourts||4}"></div>
       <div class="field"><label>Entry fee</label><input type="number" id="fTFee" value="${t.entryFee||0}"></div>
     </div>
+    <div class="dlg-section">Registration</div>
+    <div class="field"><label>Status</label><select id="fTStatus">
+      ${[['draft','Draft (hidden from players)'],['registration_open','Registration open'],['registration_closed','Registration closed'],['draw_published','Draw published'],['in_progress','In progress'],['completed','Completed'],['cancelled','Cancelled']]
+        .map(([v,l])=>`<option value="${v}" ${(t.status||'draft')===v?'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="field-row">
+      <div class="field"><label>Registration deadline</label>${dateFieldHtml('fTRegDate', dl ? localDateStr(dl) : '')}</div>
+      <div class="field"><label>Time</label><input type="time" id="fTRegTime" value="${dl ? localTimeStr(dl) : '23:59'}"></div>
+    </div>
+    <div class="helptext">Players can register themselves while the status is <b>Registration open</b>, until the deadline. After it, only an admin can add players. Leave the date empty for no deadline.</div>
   `;
   openDialog(existing?'Edit tournament':'New tournament', body, stdFoot('btnSaveTournamentDlg', existing?'Save':'Create'));
   document.getElementById('btnSaveTournamentDlg').onclick = async ()=>{
@@ -4372,8 +4625,15 @@ function openTournamentDialog(existing){
       name, description:document.getElementById('fTDesc').value.trim(),
       startDate:document.getElementById('fTStart').value, endDate:document.getElementById('fTEnd').value,
       venue:document.getElementById('fTVenue').value.trim(), organizer:document.getElementById('fTOrganizer').value.trim(),
-      numCourts: parseInt(document.getElementById('fTCourts').value,10)||4, entryFee: parseFloat(document.getElementById('fTFee').value)||0
+      numCourts: parseInt(document.getElementById('fTCourts').value,10)||4, entryFee: parseFloat(document.getElementById('fTFee').value)||0,
+      status: document.getElementById('fTStatus').value
     };
+    const regDate = document.getElementById('fTRegDate').value, regTime = document.getElementById('fTRegTime').value || '23:59';
+    if(regDate){
+      const d = new Date(regDate+'T'+regTime+':00');
+      if(isNaN(d)){ toast('Check the registration deadline', true); return; }
+      data.regCloseDate = d.toISOString();
+    } else data.regCloseDate = '';
     if(existing){ await updateTournament(existing.id, data); } else { await createTournament(data); }
     closeGenericDialog(); render();
   };
@@ -4579,6 +4839,7 @@ function openAdminRegisterDialog(t){
     <div class="field"><label>Player</label><select id="fRegDlgPlayer"><option value="">Choose player&hellip;</option>${allPlayersSorted.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
     <div class="field" id="fRegDlgPartnerWrap" hidden><label>Partner</label><select id="fRegDlgPartner"><option value="">Choose partner&hellip;</option>${allPlayersSorted.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
     <div class="helptext">Don't see the player? <button type="button" class="btn btn-sm" id="btnRegDlgNewPlayer" style="margin-left:4px">${ICONS.plus} New player profile</button></div>
+    ${lateEntryNote(t)}
   `;
   openDialog('Register a player', body, stdFoot('btnSaveRegDlg','Register'));
   const eventSel = document.getElementById('fRegDlgEvent');
@@ -5068,6 +5329,7 @@ document.addEventListener('click', async (e)=>{
       }catch(err){ out.textContent = 'Not working yet: ' + ShareAPI.explain(err); }
       return;
     }
+    case 'btnUnfollow': setFollow(null); return;
     case 'btnViewerRetry': state.viewerError=null; state.ready=false; render(); ViewerMode.load().catch(err=>{ state.ready=true; state.viewerError = err.offline?'offline':'error'; state.viewerErrorMsg=ShareAPI.explain(err); render(); }); return;
     case 'repPlayers': exportPlayers(); return;
     case 'repStats': exportPlayerStats(); return;
@@ -5153,6 +5415,7 @@ document.addEventListener('change', async (e)=>{
   if(target.matches('[data-filter]')){ handleFilterInput(target); return; }
   if(target.id==='globalSearch'){ state.search=target.value; state.searchOpen=true; rerenderPreservingFocus(target); return; }
   if(target.id==='selViewingPlayer'){ setViewingPlayer(target.value||null); return; }
+  if(target.id==='viewerFollow'){ setFollow(target.value||null); return; }
   if(target.matches('[data-reg-status]')){
     const reg = state.registrations.find(r=>r.id===target.getAttribute('data-reg-status'));
     if(reg) await setRegistrationStatus(reg, target.value);
@@ -5185,6 +5448,13 @@ document.addEventListener('input', (e)=>{
 function postRenderHooks(){
   if((state.view==='tdetail' && state.tab==='draws') || ['draws','results'].includes(state.view)){
     requestAnimationFrame(drawAllBracketConnectors);
+  }
+  const fp = followedPlayer();
+  if(fp && state.tab==='draws'){
+    document.querySelectorAll('#tabBody [data-match-id], #tabBody [data-open-match]').forEach(el=>{
+      const m = matchById(el.getAttribute('data-match-id') || el.getAttribute('data-open-match'));
+      if(m && matchHasPlayer(m, fp.id)) el.classList.add('me-match');
+    });
   }
 }
 function applyStoredTheme(){
