@@ -376,6 +376,17 @@
   .seg button{ flex:1; border:1px solid var(--border); background:var(--bg); color:var(--muted); padding:8px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; min-width:70px; }
   .seg button.active{ background:var(--court); border-color:var(--court); color:var(--court-ink); }
   .helptext{ font-size:11.5px; color:var(--faint); }
+  .am-warn{ background:color-mix(in srgb, var(--gold) 12%, transparent); color:var(--ink); border-radius:10px; padding:9px 11px; font-size:12.5px; margin-bottom:10px; }
+  .am-final-teams{ display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:center; margin-top:12px; }
+  .am-final-team{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .am-final-team select{ width:100%; min-width:0; padding:9px 8px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font:inherit; font-size:13px; }
+  .am-final-lbl{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .am-final-vs{ font-weight:800; color:var(--muted); font-size:12px; padding-top:18px; }
+  .am-final-card{ border-radius:16px; padding:14px; background:linear-gradient(135deg, color-mix(in srgb, var(--court) 10%, var(--surface)), color-mix(in srgb, #d43fd8 8%, var(--surface))); border:1px solid color-mix(in srgb, var(--court) 22%, var(--border)); margin-bottom:14px; }
+  .am-final-card .row-h{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .am-final-card h4{ margin:0; font-size:15px; font-weight:800; }
+  .am-final-champ{ font-size:13px; font-weight:700; color:var(--court); margin-top:8px; }
+  @media (max-width:420px){ .am-final-teams{ grid-template-columns:1fr; } .am-final-vs{ padding:0; text-align:center; } }
 
   .toast-host{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; z-index:80; width:min(360px,92vw); align-items:center; }
   .toast{ background:var(--ink); color:var(--bg); padding:9px 16px; border-radius:999px; font-size:12.5px; font-weight:600; box-shadow:var(--shadow); text-align:center; }
@@ -548,11 +559,7 @@
     .t-header{ gap:10px; }
     .t-header h2{ font-size:21px; }
     .t-header > div{ min-width:0; }
-    .t-header .t-actions{ width:100%; }
 
-    /* tournament tabs: a 4-column grid instead of one long row */
-    .tabs{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; overflow:visible; gap:3px; }
-    .tab{ padding:9px 2px; font-size:10.5px; letter-spacing:.02em; white-space:normal; text-align:center; }
 
     /* grids collapse to one column */
     .cat-grid, .group-grid{ grid-template-columns:minmax(0,1fr); }
@@ -575,6 +582,101 @@
     .field-row .field{ flex:1 1 140px; }
     .court-list{ gap:6px; }
     dialog{ width:calc(100vw - 24px); max-height:86vh; }
+  }
+
+
+  /* ---------- action sheet (the "⋯" menu on phones) ---------- */
+  dialog.sheet{ width:min(440px,100vw); max-width:100vw; margin:auto auto 0; border-radius:20px 20px 0 0; padding:8px 12px calc(12px + env(safe-area-inset-bottom)); max-height:80vh; overflow-y:auto; }
+  @media (min-width:701px){ dialog.sheet{ margin:auto; border-radius:18px; padding-bottom:12px; } }
+  .sheet-grip{ width:38px; height:5px; border-radius:3px; background:var(--border); margin:2px auto 8px; }
+  .sheet-title{ font-size:12px; font-weight:700; color:var(--muted); text-align:center; padding:2px 0 8px; }
+  .sheet-title:empty{ display:none; }
+  .sheet-list{ background:var(--surface-2); border-radius:14px; overflow:hidden; }
+  .sheet-item{ width:100%; display:flex; align-items:center; gap:12px; padding:14px 16px; border:none; border-bottom:1px solid var(--border); background:none; color:var(--ink); font:inherit; font-size:15px; font-weight:600; text-align:left; cursor:pointer; }
+  .sheet-item:last-child{ border-bottom:none; }
+  .sheet-item svg{ width:19px; height:19px; color:var(--muted); flex:none; }
+  .sheet-item.danger, .sheet-item.danger svg{ color:var(--danger); }
+  .sheet-item.primary, .sheet-item.primary svg{ color:var(--court); }
+  .sheet-item:disabled{ opacity:.45; }
+  .sheet-cancel{ width:100%; margin-top:8px; padding:14px; border:none; border-radius:14px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:15px; font-weight:700; cursor:pointer; }
+  .m-more-btn svg{ width:18px; height:18px; }
+  .ev-subtabs{ display:flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:12px; margin:4px 0 14px; }
+  .ev-subtabs button{ flex:1; border:none; background:transparent; color:var(--muted); padding:9px 6px; border-radius:9px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .ev-subtabs button.active{ background:var(--surface); color:var(--court); box-shadow:var(--shadow); }
+  .ev-subtabs .n{ font-weight:600; color:var(--faint); margin-left:3px; }
+  .court-chip .cc-name{ display:inline-flex; align-items:center; gap:6px; min-width:0; }
+  .court-chip .cc-actions{ display:inline-flex; gap:4px; margin-left:auto; }
+  .court-chip .cc-actions .icon-btn{ width:30px; height:30px; }
+  .court-chip .cc-actions .icon-btn svg{ width:15px; height:15px; }
+  .m-details > summary{ list-style:none; cursor:pointer; }
+  .m-details > summary svg{ width:15px; height:15px; flex:none; }
+  .m-details > summary{ font-size:14px !important; color:var(--ink) !important; }
+  .m-details select{ flex:1 1 150px; min-width:0 !important; padding:9px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font:inherit; font-size:13px; }
+  .m-details:not([open]) > summary{ margin-bottom:0 !important; }
+  .export-row .m-more-btn{ margin-left:auto; }
+  .m-details > summary::-webkit-details-marker{ display:none; }
+  .filter-count{ display:inline-flex; align-items:center; justify-content:center; min-width:17px; height:17px; border-radius:9px; background:var(--court); color:#fff; font-size:10.5px; font-weight:800; padding:0 4px; margin-left:2px; }
+
+  @media (max-width:700px){
+    /* secondary actions live in the "⋯" sheet */
+    .m-overflow{ display:none !important; }
+    .m-hide{ display:none; }
+
+    /* tournament header: title + two icon buttons */
+    .t-header{ flex-wrap:nowrap; align-items:flex-start; margin-bottom:10px; }
+    .t-header h2{ font-size:19px; line-height:1.2; }
+    .t-header .t-sub{ font-size:12px; line-height:1.6; }
+    .t-header .t-actions{ width:auto; flex:none; flex-wrap:nowrap; gap:6px; }
+    .t-header .t-actions .btn{ width:38px; height:38px; padding:0; justify-content:center; font-size:0; gap:0; border-radius:12px; }
+    .t-header .t-actions .btn.m-keep{ width:auto; padding:0 13px; font-size:13px; gap:6px; }
+    .t-header .t-actions .btn svg{ width:18px; height:18px; }
+    .back-link{ margin-bottom:2px; }
+
+    /* one row of tabs that scrolls sideways, pinned under the top bar */
+    .tabs{ display:flex; flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; -webkit-overflow-scrolling:touch;
+      width:auto; max-width:none; margin:0 -14px 14px; padding:0 14px; gap:2px; background:var(--bg); border-radius:0; border-bottom:1px solid var(--border);
+      position:sticky; top:calc(max(10px, env(safe-area-inset-top)) + 49px); z-index:25; }
+    .tabs::-webkit-scrollbar{ display:none; }
+    .tab{ flex:none; padding:11px 12px 10px; font-size:13.5px; font-weight:600; text-transform:none; letter-spacing:0; border-radius:0; background:none; box-shadow:none; border-bottom:2.5px solid transparent; margin-bottom:-1px; white-space:nowrap; }
+    .tab.active{ background:none; box-shadow:none; color:var(--court); border-bottom-color:var(--court); font-weight:700; }
+
+    /* quieter toolbars */
+    .filter-bar{ gap:6px; margin-bottom:12px; }
+    .filter-bar .m-adv{ display:none !important; }
+    .filter-bar.open .m-adv{ display:block !important; }
+    .filter-bar.open select.m-adv{ display:block !important; }
+    .filter-bar .btn, .export-row .btn{ flex:none; }
+    .export-row:not(:has(> :not(.m-overflow))){ display:none; }
+
+    /* compact stats */
+    .stat-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:14px; }
+    .stat-tile{ padding:10px 10px; border-radius:12px; }
+    .stat-tile .stat-num{ font-size:19px; }
+    .stat-tile .stat-label{ font-size:10.5px; line-height:1.25; }
+
+    /* match rows: event on top, names, then score + actions */
+    .list-row{ gap:6px 10px; padding:11px 12px; border-radius:12px; }
+    .list-row > .pill:first-child{ order:-2; }
+    .list-row > .pill:first-child + .grow{ flex-basis:100%; }
+    .list-row > .row.no-print{ margin-left:auto; }
+
+    /* people and events: denser cards */
+    .cat-grid{ gap:8px; }
+    .cat-card{ padding:11px 13px; border-radius:12px; }
+    .cat-card h3{ font-size:15px; }
+    .cat-card .avatar{ width:34px; height:34px; font-size:14px; }
+    .cat-card .row{ margin-bottom:4px !important; }
+    .cat-card .cat-meta{ gap:4px; }
+    .cat-card .sub-txt{ font-size:12.5px; color:var(--muted); }
+    .cat-card .avatar + div h3{ font-size:14.5px; line-height:1.25; }
+    .card.m-details{ padding:12px 14px; }
+
+    /* courts: two per row */
+    .court-list{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .court-chip{ padding:10px; }
+
+    .section-h{ margin:18px 0 8px; }
+    .card{ padding:14px; }
   }
 
   @media print{
@@ -603,6 +705,13 @@
     <div class="dlg-body" id="genericBody"></div>
     <div class="dlg-foot" id="genericFoot"></div>
   </form>
+</dialog>
+
+<dialog id="dlgSheet" class="sheet" aria-label="Actions">
+  <div class="sheet-grip" aria-hidden="true"></div>
+  <div class="sheet-title" id="sheetTitle"></div>
+  <div class="sheet-list" id="sheetList"></div>
+  <button type="button" class="sheet-cancel" id="sheetCancel">Cancel</button>
 </dialog>
 
 <dialog id="dlgConfirm" style="width:min(400px,92vw)">
@@ -649,6 +758,7 @@ const ICONS = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg>',
   users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.8c1.9.8 3.1 2.6 3.5 5.2"/></svg>',
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>',
+  filter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>',
@@ -841,7 +951,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260925.163955';
+const APP_BUILD = '20260925.184254';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -1859,6 +1969,7 @@ async function addAmericanoRounds(event, count){
     if(!draw || draw.format!=='americano') throw new Error('Generate the Americano draw first.');
     const variant = event.americanoVariant||'classic';
     if(variant==='mexicano') throw new Error('Mexicano adds rounds one at a time with "Generate next round".');
+    if(americanoFinalMatch(event.id)) throw new Error('Remove the final before adding more rounds.');
     count = Math.max(1, Math.min(60, parseInt(count,10)||1));
     const pids = eventEntries(event.id).filter(e=>!e.isAmericanoTeam).map(e=>e.player1Id);
     const n = pids.length;
@@ -2019,7 +2130,8 @@ async function generateNextMexicanoRound(event){
     if(!draw || draw.format!=='americano' || (event.americanoVariant||'classic')!=='mexicano'){
       throw new Error('This is only for Mexicano-variant Americano events.');
     }
-    const matches = eventMatches(event.id);
+    if(americanoFinalMatch(event.id)) throw new Error('Remove the final before generating another round.');
+    const matches = americanoRoundMatches(event.id);
     const individualEntries = eventEntries(event.id).filter(e=>!e.isAmericanoTeam);
     if(!individualEntries.length) throw new Error('No players to pair.');
     const lastRound = matches.length ? Math.max(...matches.map(m=>m.round)) : 0;
@@ -2036,6 +2148,114 @@ async function generateNextMexicanoRound(event){
     for(const m of built.matches) await Store.add('matches', m, m.id);
     toast('Round ' + nextRound + ' generated' + (built.sitOut.length ? (' - ' + built.sitOut.map(e=>playerName(e.player1Id)).join(', ') + ' sit out (not a multiple of 4)') : ''));
   });
+}
+/* ============ AMERICANO FINAL ============
+   After the rounds, the organiser can play one final between the top four of
+   the standings (bracket 'AMF'). Default pairing is 1st+4th vs 2nd+3rd so the
+   two teams are balanced; for Mixed it is top man + 2nd woman vs 2nd man + top
+   woman. The final doesn't change the standings; it decides Champion (winners)
+   and Runner-up (losers). */
+const AM_FINAL_BO3 = { bestOf:3, pointsToWin:21, winBy:2, capPoints:30, deuceEnabled:true };
+function americanoFinalMatch(eventId){ return eventMatches(eventId).find(m=>m.bracket==='AMF') || null; }
+function americanoRoundMatches(eventId){ return eventMatches(eventId).filter(m=>m.bracket==='AM'); }
+function americanoRoundsDone(eventId){
+  const ms = americanoRoundMatches(eventId);
+  return ms.length>0 && ms.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status));
+}
+function americanoFinalDefaultTeams(ev){
+  const individual = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam);
+  const standing = computeAmericanoStandings(individual, americanoRoundMatches(ev.id));
+  if((ev.americanoVariant||'classic')==='mixed'){
+    const g = s=>standing.filter(r=>(playerById(r.playerId)||{}).gender===s).map(r=>r.playerId);
+    const men = g('male'), women = g('female');
+    if(men.length>=2 && women.length>=2) return [[men[0], women[1]], [men[1], women[0]]];
+  }
+  const top = standing.slice(0,4).map(r=>r.playerId);
+  if(top.length<4) return null;
+  return [[top[0], top[3]], [top[1], top[2]]];
+}
+async function createAmericanoFinal(ev, teamA, teamB, bestOf){
+  return act(async ()=>{
+    const draw = eventDraw(ev.id);
+    if(!draw || draw.format!=='americano') throw new Error('Generate the Americano draw first.');
+    if(americanoFinalMatch(ev.id)) throw new Error('This event already has a final.');
+    const ids = [...teamA, ...teamB];
+    if(ids.some(x=>!x) || new Set(ids).size!==4) throw new Error('Pick four different players.');
+    const rounds = americanoRoundMatches(ev.id);
+    const lastRound = rounds.length ? Math.max(...rounds.map(m=>m.round)) : 0;
+    const mk = ([a,b])=>({id:uid(), eventId:ev.id, player1Id:a, player2Id:b, seed:null, clubId:null, registrationId:null, isAmericanoTeam:true, americanoRound:lastRound+1, americanoFinal:true});
+    const tA = mk(teamA), tB = mk(teamB);
+    const m = baseMatch({tournamentId:ev.tournamentId, eventId:ev.id, drawId:draw.id, bracket:'AMF', round:lastRound+1, position:0, e1:tA, e2:tB});
+    m.id = uid(); m.estDurationMin = bestOf===3 ? 45 : 30;
+    markSchedulable([m]);
+    await Store.add('entries', tA, tA.id); await Store.add('entries', tB, tB.id);
+    await Store.add('matches', m, m.id);
+    await Store.update('events', ev.id, {americanoFinalScoring: bestOf===3 ? AM_FINAL_BO3 : null, status: ev.status==='completed' ? 'draw_published' : ev.status});
+    await audit(ev.tournamentId, state.role, 'americano_final_created', ev.name + ': ' + entryName(tA) + ' vs ' + entryName(tB));
+  }, 'Final created');
+}
+async function removeAmericanoFinal(ev){
+  const m = americanoFinalMatch(ev.id); if(!m) return;
+  if((m.games||[]).length && !await confirmDialog('The final already has a score. Remove it anyway?')) return;
+  return act(async ()=>{
+    await Store.remove('matches', m.id);
+    for(const eid of [m.entry1Id, m.entry2Id]) if(eid) await Store.remove('entries', eid);
+    const fresh = eventById(ev.id);
+    if(fresh && fresh.status==='completed') await Store.update('events', ev.id, {status:'draw_published'});
+    await checkEventCompletion(ev.id);
+  }, 'Final removed');
+}
+function openAmericanoFinalDialog(ev){
+  const draw = eventDraw(ev.id);
+  if(!draw || draw.format!=='americano'){ toast('Generate the Americano draw first', true); return; }
+  const individual = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam);
+  const standing = computeAmericanoStandings(individual, americanoRoundMatches(ev.id));
+  const def = americanoFinalDefaultTeams(ev);
+  if(!def){ toast('A final needs at least 4 players', true); return; }
+  const done = americanoRoundsDone(ev.id);
+  const opts = sel => standing.map((r,i)=>`<option value="${r.playerId}" ${r.playerId===sel?'selected':''}>#${i+1} ${esc(playerName(r.playerId))} (${r.pointsFor})</option>`).join('');
+  const pick = (id, sel)=>`<select id="${id}" class="am-final-pick">${opts(sel)}</select>`;
+  const mixed = (ev.americanoVariant||'classic')==='mixed';
+  const body = `
+    ${done ? '' : `<div class="am-warn">Some round matches aren't scored yet, so the top four may still change.</div>`}
+    <div class="helptext" style="margin-bottom:10px">The top four play one final. Winners are Champions, the other pair Runners-up; everyone else keeps their standings place.</div>
+    ${mixed ? '' : `<div class="seg" id="amFinalPreset" role="group" aria-label="Pairing">
+      <button type="button" class="active" data-am-pair="14">1+4 v 2+3</button>
+      <button type="button" data-am-pair="13">1+3 v 2+4</button>
+      <button type="button" data-am-pair="12">1+2 v 3+4</button>
+    </div>`}
+    <div class="am-final-teams">
+      <div class="am-final-team"><div class="am-final-lbl">Team A</div>${pick('fAmFA1', def[0][0])}${pick('fAmFA2', def[0][1])}</div>
+      <div class="am-final-vs">vs</div>
+      <div class="am-final-team"><div class="am-final-lbl">Team B</div>${pick('fAmFB1', def[1][0])}${pick('fAmFB2', def[1][1])}</div>
+    </div>
+    <div class="field" style="margin-top:12px"><label>Final format</label><select id="fAmFinalFormat">
+      <option value="1">1 game &middot; ${esc(describeScoring(scoringFor(ev, tournamentById(ev.tournamentId))))}</option>
+      <option value="3">Best of 3 &middot; games to 21, win by 2, cap 30</option>
+    </select></div>
+    <div class="helptext" id="fAmFinalNote" style="color:var(--danger)"></div>`;
+  openDialog('Create final', body, stdFoot('btnSaveAmFinal','Create final'));
+  const top = standing.slice(0,4).map(r=>r.playerId);
+  const sets = {'14':[[0,3],[1,2]], '13':[[0,2],[1,3]], '12':[[0,1],[2,3]]};
+  document.querySelectorAll('[data-am-pair]').forEach(b=>b.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-am-pair]').forEach(x=>x.classList.toggle('active', x===b));
+    const s = sets[b.getAttribute('data-am-pair')];
+    [['fAmFA1',s[0][0]],['fAmFA2',s[0][1]],['fAmFB1',s[1][0]],['fAmFB2',s[1][1]]].forEach(([id,i])=>{ document.getElementById(id).value = top[i]; });
+    check();
+  }));
+  const val = id=>document.getElementById(id).value;
+  const check = ()=>{
+    const ids = ['fAmFA1','fAmFA2','fAmFB1','fAmFB2'].map(val);
+    const ok = new Set(ids).size===4;
+    document.getElementById('fAmFinalNote').textContent = ok ? '' : 'Each player can only be picked once.';
+    return ok;
+  };
+  document.querySelectorAll('.am-final-pick').forEach(s=>s.addEventListener('change', ()=>{ document.querySelectorAll('[data-am-pair]').forEach(x=>x.classList.remove('active')); check(); }));
+  document.getElementById('btnSaveAmFinal').onclick = async ()=>{
+    if(!check()){ toast('Pick four different players', true); return; }
+    await createAmericanoFinal(eventById(ev.id), [val('fAmFA1'), val('fAmFA2')], [val('fAmFB1'), val('fAmFB2')], parseInt(val('fAmFinalFormat'),10));
+    closeGenericDialog(); render();
+  };
 }
 function buildGroupsStage(ctx, entries, groupSize){
   const groupIdxs = DrawGenerator.splitGroups(entries.length, groupSize||4);
@@ -2264,6 +2484,7 @@ function followNote(){
 function isKnockoutStageMatch(event, match){ return !!(event && match && event.drawFormat==='group_knockout' && match.bracket && match.bracket!=='GRP'); }
 function scoringFor(event, tournament, match){
   if(isKnockoutStageMatch(event, match) && event.knockoutScoring) return event.knockoutScoring;
+  if(event && match && match.bracket==='AMF' && event.americanoFinalScoring) return event.americanoFinalScoring;
   if(event && event.drawFormat==='americano'){
     // Americano is always one game per match; without its own rule it uses badminton scoring.
     const sc = event.scoringOverride;
@@ -2398,7 +2619,7 @@ function computeGroupStandings(entryIds, matches, tiebreak){
 function computeAmericanoStandings(individualEntries, matches){
   const rows = {};
   individualEntries.forEach(e=> rows[e.player1Id] = {playerId:e.player1Id, played:0, wins:0, losses:0, pointsFor:0, pointsAgainst:0});
-  matches.filter(m=> (m.status==='completed'||m.status==='walkover'||m.status==='retired') && (m.games||[]).length).forEach(m=>{
+  matches.filter(m=> m.bracket!=='AMF' && (m.status==='completed'||m.status==='walkover'||m.status==='retired') && (m.games||[]).length).forEach(m=>{
     const e1=entryById(m.entry1Id), e2=entryById(m.entry2Id);
     if(!e1||!e2) return;
     let p1=0,p2=0; (m.games||[]).forEach(g=>{ p1+=g.a||0; p2+=g.b||0; });
@@ -2434,6 +2655,7 @@ function standingPoints(rank){
 function roundLabelFor(bracket, round, maxRound, isThirdPlace){
   if(isThirdPlace) return 'Third place';
   if(bracket==='GF') return 'Grand Final';
+  if(bracket==='AMF') return 'Final';
   if(bracket==='RR'||bracket==='GRP'||bracket==='AM') return 'Round '+round;
   const fromEnd = maxRound-round;
   if(fromEnd===0) return bracket==='LB' ? 'Losers Final' : 'Final';
@@ -2488,12 +2710,31 @@ function computeEventPlacements(eventId){
   } else if(hasAM){
     const individualEntries = entries.filter(e=>!e.isAmericanoTeam);
     const ev = eventById(eventId);
-    const state_ = standingsEventState(matches, ev && (ev.americanoVariant||'classic')==='mexicano' ? ev.status==='completed' : null);
+    const fin = matches.find(m=>m.bracket==='AMF');
+    const roundMs = matches.filter(m=>m.bracket==='AM');
+    const isMex = ev && (ev.americanoVariant||'classic')==='mexicano';
+    // With a final, the event is only over once the final is decided (Mexicano included).
+    const finalDone = fin && ['completed','walkover','retired'].includes(fin.status) && fin.winnerEntryId;
+    const state_ = fin ? standingsEventState(matches, finalDone && roundMs.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status)) ? null : false)
+                       : standingsEventState(matches, isMex ? ev.status==='completed' : null);
     const standing = computeAmericanoStandings(individualEntries, matches);
-    standing.forEach((row,i)=>{
-      const ent = individualEntries.find(e=>e.player1Id===row.playerId);
-      if(ent) placements[ent.id] = standingPlacement(i+1, state_);
-    });
+    if(fin && state_==='final'){
+      const win = entryById(fin.winnerEntryId), lose = entryById(fin.winnerEntryId===fin.entry1Id ? fin.entry2Id : fin.entry1Id);
+      const champs = new Set(win ? entryPlayerIds(win) : []), runners = new Set(lose ? entryPlayerIds(lose) : []);
+      let pos = 4;
+      standing.forEach(row=>{
+        const ent = individualEntries.find(e=>e.player1Id===row.playerId);
+        if(!ent) return;
+        if(champs.has(row.playerId)) placements[ent.id] = {points:100, label:'Champion', rank:1};
+        else if(runners.has(row.playerId)) placements[ent.id] = {points:70, label:'Runner-up', rank:2};
+        else { pos++; placements[ent.id] = standingPlacement(pos, 'final'); }
+      });
+    } else {
+      standing.forEach((row,i)=>{
+        const ent = individualEntries.find(e=>e.player1Id===row.playerId);
+        if(ent) placements[ent.id] = standingPlacement(i+1, state_);
+      });
+    }
   } else if(hasGroup || hasRR){
     const draw = eventDraw(eventId);
     const groups = (draw && draw.groups && draw.groups.length) ? draw.groups : [{id:null, name:'', entryIds:entries.map(e=>e.id)}];
@@ -2966,7 +3207,7 @@ async function checkEventCompletion(eventId){
   /* Mexicano Americano generates one round at a time with no fixed round
      count, so "every match generated so far is done" doesn't mean the event
      is over - the admin decides that by not generating another round. */
-  if(ev.drawFormat==='americano' && (ev.americanoVariant||'classic')==='mexicano') return;
+  if(ev.drawFormat==='americano' && (ev.americanoVariant||'classic')==='mexicano' && !matches.some(m=>m.bracket==='AMF')) return;
   const gf2Pending = matches.some(m=>m.grKind==='gf2' && !['completed'].includes(m.status));
   const allDone = matches.every(m=> ['completed','bye','walkover','retired','cancelled'].includes(m.status) || (m.grKind==='gf2'));
   const decisive = matches.filter(m=> !(m.grKind==='gf1' && m.status==='completed' && m.winnerEntryId===m.entry2Id));
@@ -3625,7 +3866,7 @@ function renderDashboard(){
   const completedMatches = state.matches.filter(m=>['completed','walkover','retired','bye'].includes(m.status)).length;
   return `
     <div class="t-header"><div><h2>Dashboard</h2><div class="t-sub">Across all tournaments</div></div>
-      <div class="t-actions">${state.role==='admin'?`<button class="btn btn-primary btn-sm" id="btnNewTournamentHero">${ICONS.plus} New tournament</button>`:''}</div>
+      <div class="t-actions">${state.role==='admin'?`<button class="btn btn-primary btn-sm m-keep" id="btnNewTournamentHero">${ICONS.plus} New tournament</button>`:''}</div>
     </div>
     <div class="stat-grid">
       <div class="stat-tile accent"><div class="stat-num">${t.length}</div><div class="stat-label">Tournaments</div></div>
@@ -3682,7 +3923,7 @@ function renderTournamentsList(){
   const list = visibleTournaments();
   return `
     <div class="t-header"><div><h2>Tournaments</h2><div class="t-sub">${list.length} tournament${list.length===1?'':'s'}</div></div>
-      ${state.role==='admin'?`<div class="t-actions"><button class="btn btn-primary" id="btnNewTournamentHero">${ICONS.plus} New tournament</button></div>`:''}
+      ${state.role==='admin'?`<div class="t-actions"><button class="btn btn-primary m-keep" id="btnNewTournamentHero">${ICONS.plus} New tournament</button></div>`:''}
     </div>
     ${list.length ? `<div class="cat-grid">${list.map(renderTournamentCard).join('')}</div>` : `<div class="empty-tab">No tournaments to show yet.</div>`}
   `;
@@ -3708,11 +3949,12 @@ function renderTournamentDetail(){
     ${VIEWER?'':`<button class="back-link mobile-only" data-nav="${backView}">${ICONS.back} Tournaments</button>`}
     <div class="t-header">
       <div><h2>${esc(t.name)}</h2><div class="t-sub">${esc(fmtDate(t.startDate))}${t.venue?' &middot; '+esc(t.venue):''} ${tournamentStatusPill(t, true)}${!VIEWER && isShareLive(t)?` <span class="pill court" title="Anyone with the link can follow this tournament">${ICONS.link} Live link on</span>`:''}${!VIEWER && t.share && t.share.expired && state.role==='admin'?` <span class="pill" title="Not changed for ${SHARE_KEEP_DAYS} days, so the link was removed">${ICONS.link} Link expired</span>`:''}</div></div>
-      ${state.role==='admin' ? `<div class="t-actions">
-        <button class="btn btn-sm" id="btnShareTournament">${ICONS.share} Share</button>
-        <button class="btn btn-primary btn-sm" id="btnRegisterPlayerHeader">${ICONS.plus} Register player</button>
-        <button class="btn btn-sm" id="btnEditTournament">${ICONS.edit} Edit</button>
-        <button class="btn btn-danger btn-sm" id="btnDeleteTournament">${ICONS.trash} Delete</button>
+      ${state.role==='admin' ? `<div class="t-actions" data-more-scope data-more-title="${esc(t.name)}">
+        <button class="btn btn-sm" id="btnShareTournament" aria-label="Share live link" title="Share live link">${ICONS.share} Share</button>
+        <button class="btn btn-primary btn-sm m-overflow" id="btnRegisterPlayerHeader">${ICONS.plus} Register player</button>
+        <button class="btn btn-sm m-overflow" id="btnEditTournament">${ICONS.edit} Edit tournament</button>
+        <button class="btn btn-danger btn-sm m-overflow" id="btnDeleteTournament">${ICONS.trash} Delete tournament</button>
+        ${moreMenuBtn()}
       </div>` : (!VIEWER && isShareLive(t) ? `<div class="t-actions"><button class="btn btn-sm" id="btnShareTournament">${ICONS.share} Share</button></div>` : '')}
     </div>
     ${VIEWER ? renderFollowBar() : ''}
@@ -3866,13 +4108,21 @@ function renderEventDetailAdmin(t, ev){
   const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam);
   const draw = eventDraw(ev.id);
   const doubles = isDoublesType(ev.type);
+  // Two separate tabs: who is in the event, and the draw. Opens on Draw once one exists.
+  if(state.eventSubFor!==ev.id){ state.eventSub = draw ? 'draw' : 'players'; state.eventSubFor = ev.id; }
+  const sub = state.eventSub==='draw' ? 'draw' : 'players';
   return `
     <button class="back-link" data-back-events="1">${ICONS.back} All events</button>
-    <div class="row between wrap" style="margin-bottom:10px">
-      <div><h3 style="text-transform:none;font-family:'Public Sans',sans-serif;font-size:18px;font-weight:700;letter-spacing:0">${esc(ev.name)}</h3>
+    <div class="row between" style="margin-bottom:8px;flex-wrap:nowrap;align-items:flex-start">
+      <div style="min-width:0"><h3 style="text-transform:none;font-family:'Public Sans',sans-serif;font-size:18px;font-weight:700;letter-spacing:0;margin:0 0 2px">${esc(ev.name)}</h3>
         <div class="sub-txt">${esc(ev.type.replace(/_/g,' '))} &middot; ${esc(ev.drawFormat.replace(/_/g,' '))} &middot; ${statusPillPlain(ev.status)}</div></div>
-      <button class="btn btn-sm" id="btnEditEvent">${ICONS.edit} Edit event</button>
+      <button class="btn btn-sm" id="btnEditEvent" style="flex:none">${ICONS.edit} Edit</button>
     </div>
+    <div class="ev-subtabs" role="tablist">
+      <button type="button" role="tab" class="${sub==='players'?'active':''}" data-ev-sub="players">Players<span class="n">${entries.length||regs.length}</span></button>
+      <button type="button" role="tab" class="${sub==='draw'?'active':''}" data-ev-sub="draw">Draw${draw?'':'<span class="n">&ndash;</span>'}</button>
+    </div>
+    ${sub==='players' ? `
     <div class="section-h"><h3>Registrations (${regs.length})</h3><button class="btn btn-sm" id="btnBuildEntries">${ICONS.refresh} Build entries from confirmed</button></div>
     ${renderAdminRegisterRow(t, ev, doubles)}
     ${regs.length ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Player</th><th>Partner</th><th>Status</th><th></th></tr></thead><tbody>
@@ -3887,8 +4137,7 @@ function renderEventDetailAdmin(t, ev){
     ${entries.length ? entries.map(en=>`<div class="list-row"><span class="seed-badge">${en.seed||'-'}</span><span class="grow main-txt">${esc(entryName(en))}</span>
       <input type="number" min="1" class="mono" style="width:56px;border:1px solid var(--border);border-radius:8px;padding:4px;background:var(--bg);color:var(--ink)" data-seed-input="${en.id}" value="${en.seed==null?'':en.seed}" placeholder="seed">
     </div>`).join('') : `<div class="empty-tab">Build entries from confirmed registrations first.</div>`}
-
-    <div class="section-h"><h3>Draw</h3></div>
+    ` : `
     <div class="card">
       <div class="field-row">
         <div class="field"><label>Format</label><select id="fDrawFormat" data-event-id="${ev.id}">
@@ -3908,11 +4157,12 @@ function renderEventDetailAdmin(t, ev){
         ${draw && draw.format==='group_knockout' ? `<button class="btn btn-sm" id="btnGenKnockout">Generate knockout from groups</button>`:''}
         ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')!=='mexicano' ? `<button class="btn btn-sm" data-add-am-rounds="${ev.id}">${ICONS.plus} Add rounds</button>`:''}
         ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')==='mexicano' ? `<button class="btn btn-sm" id="btnGenNextMexicanoRound">${ICONS.sparkles} Generate next round</button>`:''}
-        ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')==='mexicano' && ev.status!=='completed' ? `<button class="btn btn-sm" id="btnFinishMexicano">${ICONS.check} Finish event</button>`:''}
+        ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')==='mexicano' && ev.status!=='completed' && !americanoFinalMatch(ev.id) ? `<button class="btn btn-sm" id="btnFinishMexicano">${ICONS.check} Finish event</button>`:''}
+        ${draw && draw.format==='americano' && !americanoFinalMatch(ev.id) ? `<button class="btn btn-sm" data-am-final="${ev.id}">${ICONS.trophy||ICONS.sparkles} Create final (top 4)</button>`:''}
         ${draw ? `<button class="btn btn-sm" id="btnGoDrawsFromEvent">View bracket &rarr;</button>` : ''}
       </div>
       ${draw?`<div class="helptext" style="margin-top:6px">Generated ${esc(fmtDateTime(draw.generatedAt))}. Regenerating a published draw is confirmed and audit-logged.</div>`:''}
-    </div>
+    </div>`}
   `;
 }
 
@@ -3992,10 +4242,28 @@ function renderBracketForEvent(ev, editable){
           <div class="group-card card"><h4>Women</h4>${renderAmericanoStandingsTable(standing.filter(r=>{const p=playerById(r.playerId); return p&&p.gender==='female';}))}</div>
         </div>`
       : renderAmericanoStandingsTable(standing);
-    const canAdd = editable && state.role==='admin' && (ev.americanoVariant||'classic')!=='mexicano';
-    return standingsHtml + `<div class="section-h"><h3>Matches</h3>${canAdd?`<button class="btn btn-sm no-print" data-add-am-rounds="${ev.id}">${ICONS.plus} Add rounds</button>`:''}</div>` + renderRoundRobinMatchList(matches, editable, draw.americanoSitOut);
+    const fin = americanoFinalMatch(ev.id);
+    const isAdmin = editable && state.role==='admin';
+    const canAdd = isAdmin && (ev.americanoVariant||'classic')!=='mexicano' && !fin;
+    return renderAmericanoFinalCard(ev, fin, editable) + standingsHtml + `<div class="section-h"><h3>Rounds</h3>${canAdd?`<button class="btn btn-sm no-print" data-add-am-rounds="${ev.id}">${ICONS.plus} Add rounds</button>`:''}</div>` + renderRoundRobinMatchList(matches.filter(m=>m.bracket!=='AMF'), editable, draw.americanoSitOut);
   }
   return renderBracketColumns(matches.filter(m=>m.bracket==='SE'), 'bracketMain', editable);
+}
+function renderAmericanoFinalCard(ev, fin, editable){
+  const isAdmin = editable && state.role==='admin';
+  if(!fin){
+    if(!isAdmin) return '';
+    const ready = americanoRoundsDone(ev.id);
+    return `<div class="am-final-card no-print"><div class="row-h"><h4>Final</h4><button class="btn btn-sm btn-primary" data-am-final="${ev.id}">Create final</button></div>
+      <div class="helptext">${ready ? 'All rounds are scored. Pick the top four players for a final.' : 'When the rounds are done, the top four can play a final for the title.'}</div></div>`;
+  }
+  const rowFn = editable ? renderMatchRowActionable : renderMatchListRow;
+  const w = fin.winnerEntryId && entryById(fin.winnerEntryId);
+  const sc = scoringFor(ev, tournamentById(ev.tournamentId), fin);
+  return `<div class="am-final-card"><div class="row-h"><h4>Final</h4>${isAdmin && fin.status!=='completed' ? `<button class="btn btn-sm btn-ghost no-print" data-am-final-remove="${ev.id}">Remove</button>`:''}</div>
+    <div class="helptext" style="margin-bottom:6px">${esc(describeScoring(sc))}</div>
+    ${rowFn(fin)}
+    ${w ? `<div class="am-final-champ">${ICONS.trophy||''} Champions: ${esc(entryName(w))}</div>`:''}</div>`;
 }
 function renderAmericanoStandingsTable(rows){
   if(!rows.length) return `<div class="empty-tab">No players.</div>`;
@@ -4011,11 +4279,12 @@ function renderDrawsTab(t){
   state.filters.drawEventId = selId;
   const ev = eventById(selId);
   return `
-    <div class="filter-bar">
+    <div class="filter-bar" data-more-scope>
       <select id="fDrawEventSelect">${evs.map(e=>`<option value="${e.id}" ${e.id===selId?'selected':''}>${esc(e.name)}</option>`).join('')}</select>
-      <button class="btn btn-sm no-print" id="btnExportDraw">${ICONS.download} Export CSV</button>
-      <button class="btn btn-sm no-print" id="btnPrintDraw">${ICONS.print} Print</button>
-      ${state.role==='admin'?`<button class="btn btn-sm no-print" id="btnSwapEntries">Swap entries&hellip;</button>`:''}
+      <button class="btn btn-sm no-print m-overflow" id="btnExportDraw">${ICONS.download} Export CSV</button>
+      <button class="btn btn-sm no-print m-overflow" id="btnPrintDraw">${ICONS.print} Print</button>
+      ${state.role==='admin'?`<button class="btn btn-sm no-print m-overflow" id="btnSwapEntries">${ICONS.refresh} Swap entries&hellip;</button>`:''}
+      ${moreMenuBtn('Draw actions')}
     </div>
     ${renderBracketForEvent(ev, state.role==='admin')}
   `;
@@ -4068,20 +4337,26 @@ function renderFilterBar(t, key, opts){
   const f = state.filters[key] = state.filters[key]||{};
   const evs = tEvents(t.id);
   const courts = tCourts(t.id);
-  return `<div class="filter-bar">
+  const adv = ['courtId','status','date'].filter(k=>opts[k==='courtId'?'court':k]!==false && f[k]).length;
+  const open = state.mFilterOpen && state.mFilterOpen[key];
+  return `<div class="filter-bar ${open?'open':''}">
     <select data-filter="${key}.eventId"><option value="">All events</option>${evs.map(e=>`<option value="${e.id}" ${f.eventId===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}</select>
-    ${opts.court!==false?`<select data-filter="${key}.courtId"><option value="">All courts</option>${courts.map(c=>`<option value="${c.id}" ${f.courtId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>`:''}
-    ${opts.status!==false?`<select data-filter="${key}.status"><option value="">All statuses</option>${['scheduled','called','in_progress','completed','walkover','retired','cancelled','postponed','pending','bye'].map(s=>`<option value="${s}" ${f.status===s?'selected':''}>${esc(s)}</option>`).join('')}</select>`:''}
-    ${opts.date!==false?`<div class="date-field" style="width:150px"><input type="text" class="date-input" data-filter="${key}.date" data-datepicker readonly value="${esc(f.date||'')}" placeholder="Any date" autocomplete="off">${ICONS.calendar.replace('<svg ', '<svg class="date-ic" ')}</div>`:''}
+    ${opts.court!==false?`<select class="m-adv" data-filter="${key}.courtId"><option value="">All courts</option>${courts.map(c=>`<option value="${c.id}" ${f.courtId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>`:''}
+    ${opts.status!==false?`<select class="m-adv" data-filter="${key}.status"><option value="">All statuses</option>${['scheduled','called','in_progress','completed','walkover','retired','cancelled','postponed','pending','bye'].map(s=>`<option value="${s}" ${f.status===s?'selected':''}>${esc(s)}</option>`).join('')}</select>`:''}
+    ${opts.date!==false?`<div class="date-field m-adv" style="width:150px"><input type="text" class="date-input" data-filter="${key}.date" data-datepicker readonly value="${esc(f.date||'')}" placeholder="Any date" autocomplete="off">${ICONS.calendar.replace('<svg ', '<svg class="date-ic" ')}</div>`:''}
     <input type="text" data-filter="${key}.player" placeholder="Player name" value="${esc(f.player||'')}" style="width:130px">
+    <button type="button" class="btn btn-sm mobile-only ${open?'btn-primary':''}" data-filter-toggle="${key}" aria-expanded="${open?'true':'false'}">${ICONS.filter} Filters${adv?`<span class="filter-count">${adv}</span>`:''}</button>
+    ${opts.more ? opts.more : ''}
   </div>`;
 }
 function renderMatchesTab(t){
   const matches = applyMatchFilters(tMatches(t.id), state.filters.matches);
   matches.sort((a,b)=> (a.scheduledStart||'9999').localeCompare(b.scheduledStart||'9999'));
   return `
-    ${renderFilterBar(t,'matches')}
-    <div class="export-row no-print"><button class="btn btn-sm" id="btnExportSchedule">${ICONS.download} Export schedule CSV</button><button class="btn btn-sm" id="btnExportResults">${ICONS.download} Export results CSV</button></div>
+    <div data-more-scope>
+    ${renderFilterBar(t,'matches',{more: moreMenuBtn()})}
+    <div class="export-row no-print"><button class="btn btn-sm m-overflow" id="btnExportSchedule">${ICONS.download} Export schedule CSV</button><button class="btn btn-sm m-overflow" id="btnExportResults">${ICONS.download} Export results CSV</button></div>
+    </div>
     ${matches.length ? matches.map(m=>renderMatchRowActionable(m)).join('') : `<div class="empty-tab">No matches match these filters.</div>`}
   `;
 }
@@ -4118,9 +4393,11 @@ function renderScheduleTab(t){
   matches.forEach(m=>{ (grid[m.scheduledStart]=grid[m.scheduledStart]||{})[m.courtId]=m; });
   return `
     ${followNote()}
-    ${VIEWER && followedPlayer() ? '' : renderFilterBar(t,'schedule',{status:false})}
-    <div class="export-row no-print"><button class="btn btn-sm" id="btnExportCourtSchedule">${ICONS.download} Export CSV</button><button class="btn btn-sm" id="btnPrintSchedule">${ICONS.print} Print</button>
+    <div data-more-scope>
+    ${VIEWER && followedPlayer() ? '' : renderFilterBar(t,'schedule',{status:false, more: moreMenuBtn()})}
+    <div class="export-row no-print"><button class="btn btn-sm m-overflow" id="btnExportCourtSchedule">${ICONS.download} Export CSV</button><button class="btn btn-sm m-overflow" id="btnPrintSchedule">${ICONS.print} Print</button>
       ${state.role==='admin'?`<button class="btn btn-sm btn-primary" id="btnAssignAny">${ICONS.calendar} Schedule a match&hellip;</button>`:''}</div>
+    </div>
     ${!times.length ? `<div class="empty-tab">Nothing scheduled yet.</div>` : `
     <div class="sched-list">${times.map(time=>`<div class="sched-list-time">${esc(fmtDateTime(time))}</div>${courts.map(c=>{
       const m = grid[time] && grid[time][c.id];
@@ -4152,9 +4429,9 @@ function renderCourtsTab(t){
     ${state.role==='admin'?`<div class="row wrap" style="margin-bottom:12px"><button class="btn btn-primary btn-sm" id="btnNewCourt">${ICONS.plus} Add court</button></div>`:''}
     ${courts.length ? `<div class="court-list">${courts.map(c=>{
       const live = state.matches.find(m=>m.courtId===c.id && m.status==='in_progress');
-      return `<div class="court-chip ${c.active?'':'inactive'}">${ICONS.court} ${esc(c.name)} ${live?'<span class="pill live" style="margin-left:4px">LIVE</span>':''}
-        ${state.role==='admin'?`<button class="icon-btn" style="width:20px;height:20px" data-toggle-court="${c.id}" title="${c.active?'Deactivate':'Activate'}">${c.active?ICONS.check:ICONS.warn}</button>
-        <button class="icon-btn btn-danger" style="width:20px;height:20px" data-delete-court="${c.id}">${ICONS.trash}</button>`:''}
+      return `<div class="court-chip ${c.active?'':'inactive'}"><span class="cc-name">${ICONS.court} ${esc(c.name)} ${live?'<span class="pill live">LIVE</span>':''}</span>
+        ${state.role==='admin'?`<span class="cc-actions"><button class="icon-btn" data-toggle-court="${c.id}" title="${c.active?'Deactivate':'Activate'}" aria-label="${c.active?'Deactivate':'Activate'} ${esc(c.name)}">${c.active?ICONS.check:ICONS.warn}</button>
+        <button class="icon-btn btn-danger" data-delete-court="${c.id}" title="Delete" aria-label="Delete ${esc(c.name)}">${ICONS.trash}</button></span>`:''}
       </div>`;
     }).join('')}</div>` : `<div class="empty-tab">No courts yet.</div>`}
   `;
@@ -4165,7 +4442,7 @@ function renderResultsTab(t){
   const fp = followedPlayer();
   const evs = tEvents(t.id).filter(ev=> !fp || eventEntries(ev.id).some(en=>entryPlayerIds(en).includes(fp.id)));
   return `${followNote()}
-    <div class="export-row no-print"><button class="btn btn-sm" id="btnExportResultsMain">${ICONS.download} Export all results CSV</button><button class="btn btn-sm" id="btnPrintResults">${ICONS.print} Print</button></div>
+    <div class="export-row no-print" data-more-scope><button class="btn btn-sm m-overflow" id="btnExportResultsMain">${ICONS.download} Export all results CSV</button><button class="btn btn-sm m-overflow" id="btnPrintResults">${ICONS.print} Print</button>${moreMenuBtn('Export or print results')}</div>
     ${evs.map(ev=>renderEventResultsCard(ev)).join('') || `<div class="empty-tab">No events yet.</div>`}
   `;
 }
@@ -4178,7 +4455,7 @@ function renderEventResultsCard(ev){
   const podium = ranked.filter(r=>!r.provisional && (['Champion','Runner-up'].includes(r.label) || /^#[123]$/.test(r.label))).slice(0,4);
   return `<div class="card">
     <div class="row between wrap"><h3 style="font-family:'Public Sans';font-size:15px;text-transform:none;letter-spacing:0;margin:0">${esc(ev.name)}</h3>
-      <button class="btn btn-sm no-print" data-export-standings="${ev.id}">${ICONS.download} Export</button></div>
+      <button class="btn btn-sm no-print m-overflow" data-export-standings="${ev.id}">${ICONS.download} Export</button></div>
     <div class="row wrap" style="margin:8px 0;gap:8px">
       ${podium.map(r=>`<span class="pill ${r.label==='Champion'?'gold':'court'}">${esc(r.label)}: ${esc(entryName(r.entry))}</span>`).join('') || '<span class="sub-txt">Still in progress.</span>'}
     </div>
@@ -4338,8 +4615,8 @@ function renderAdminTournamentPlayersTab(t){
       <div class="helptext">${players.length} player${players.length===1?'':'s'} registered in this tournament</div>
       <button class="btn btn-sm" id="btnNewPlayerFromTournament">${ICONS.plus} New player profile</button>
     </div>
-    ${evs.length ? `<div class="card" style="margin-bottom:14px">
-      <div class="sub-txt" style="margin-bottom:6px;font-weight:700">Add a player to this tournament</div>
+    ${evs.length ? `<details class="card m-details" id="tAddPlayerForm" style="margin-bottom:14px" ${isPhone() && !state.tAddOpen ? '' : 'open'}>
+      <summary class="sub-txt" style="margin-bottom:6px;font-weight:700;display:flex;align-items:center;gap:6px">${ICONS.plus} Add a player to this tournament</summary>
       ${lateEntryNote(t)}
       <div class="row wrap" style="gap:8px">
         <select id="fTPlayerAddEvent" style="min-width:150px"><option value="">Choose event&hellip;</option>${evs.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
@@ -4348,7 +4625,7 @@ function renderAdminTournamentPlayersTab(t){
         <button class="btn btn-primary btn-sm" id="btnTournamentAddPlayer">${ICONS.plus} Add to event</button>
       </div>
       <div class="helptext" style="margin-top:6px">Registers the player directly and confirms it immediately. Need a player who isn't in the system yet? Use "New player profile" first.</div>
-    </div>` : `<div class="helptext" style="margin-bottom:14px">Add an event first (Events tab), then players can be registered into it.</div>`}
+    </details>` : `<div class="helptext" style="margin-bottom:14px">Add an event first (Events tab), then players can be registered into it.</div>`}
     ${players.length ? `<div class="cat-grid">${players.map(p=>`<div class="cat-card" data-open-player="${p.id}">
       <div class="row" style="margin-bottom:6px"><div class="avatar">${p.photoUrl?`<img src="${esc(p.photoUrl)}" alt="">`:esc((p.name||'?').slice(0,1))}</div>
       <div><h3 style="margin:0">${esc(p.name)}</h3><div class="sub-txt">${esc((clubById(p.clubId)||{}).name||'No club')}</div></div></div>
@@ -4374,7 +4651,7 @@ function renderPlayersRegistry(){
   list.sort((a,b)=>a.name.localeCompare(b.name));
   return `
     <div class="t-header"><div><h2>Players</h2><div class="t-sub">${list.length} player${list.length===1?'':'s'}</div></div>
-      ${state.role==='admin'?`<div class="t-actions"><button class="btn btn-sm" id="btnExportPlayers">${ICONS.download} Export</button><button class="btn btn-primary btn-sm" id="btnNewPlayer">${ICONS.plus} Add player</button></div>`:''}
+      ${state.role==='admin'?`<div class="t-actions" data-more-scope><button class="btn btn-sm m-overflow" id="btnExportPlayers">${ICONS.download} Export players CSV</button><button class="btn btn-primary btn-sm m-keep" id="btnNewPlayer">${ICONS.plus} Add player</button>${moreMenuBtn()}</div>`:''}
     </div>
     <div class="filter-bar">
       <input type="text" placeholder="Search players" data-filter="players.q" value="${esc(f.q||'')}">
@@ -4403,7 +4680,7 @@ function renderRankingsView(){
   stats.sort((a,b)=> b.rankingPoints-a.rankingPoints || b.winPct-a.winPct);
   return `
     <div class="t-header"><div><h2>Rankings</h2><div class="t-sub" title="${esc(RANKING_POINTS_TOOLTIP)}">Ranking points formula <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></div></div>
-      ${VIEWER?'':`<div class="t-actions"><button class="btn btn-sm" id="btnExportRankings">${ICONS.download} Export</button></div>`}
+      ${VIEWER?'':`<div class="t-actions"><button class="btn btn-sm" id="btnExportRankings" aria-label="Export rankings CSV" title="Export rankings CSV">${ICONS.download} Export</button></div>`}
     </div>
     <div class="filter-bar">
       <select data-filter="rankings.gender"><option value="">All genders</option><option value="male" ${f.gender==='male'?'selected':''}>Male</option><option value="female" ${f.gender==='female'?'selected':''}>Female</option></select>
@@ -4664,6 +4941,34 @@ function openDialog(title, bodyHtml, footHtml){
   document.getElementById('genericBody').innerHTML = bodyHtml;
   document.getElementById('genericFoot').innerHTML = footHtml;
   const dlg = document.getElementById('dlgGeneric');
+  if(!dlg.open) dlg.showModal();
+}
+/* ---------- "⋯" overflow menu ----------
+   On phones, secondary buttons (class m-overflow) are hidden and a single ⋯
+   button opens them as a bottom sheet. The sheet clicks the real (hidden)
+   button, so every existing handler keeps working unchanged. */
+function isPhone(){ try{ return window.matchMedia('(max-width:700px)').matches; }catch(e){ return false; } }
+function moreMenuBtn(label){
+  return `<button type="button" class="btn btn-sm m-more-btn mobile-only" data-more-menu="1" aria-label="${esc(label||'More actions')}" title="${esc(label||'More actions')}">${ICONS.more}</button>`;
+}
+function openMoreSheet(trigger){
+  const scope = trigger.closest('[data-more-scope]') || trigger.parentElement;
+  const items = [...scope.querySelectorAll('.m-overflow')].filter(b=>b.tagName==='BUTTON' || b.tagName==='A');
+  openActionSheet(scope.getAttribute('data-more-title') || '', items.map(b=>({
+    html: b.innerHTML, disabled: b.disabled,
+    kind: b.classList.contains('btn-danger') ? 'danger' : b.classList.contains('btn-primary') ? 'primary' : '',
+    run: ()=>b.click()
+  })));
+}
+function openActionSheet(title, items){
+  const dlg = document.getElementById('dlgSheet'); if(!dlg) return;
+  document.getElementById('sheetTitle').textContent = title || '';
+  const list = document.getElementById('sheetList');
+  list.innerHTML = items.map((it,i)=>`<button type="button" class="sheet-item ${it.kind||''}" data-sheet-i="${i}" ${it.disabled?'disabled':''}>${it.html}</button>`).join('');
+  const close = ()=>{ if(dlg.open) dlg.close(); };
+  list.querySelectorAll('[data-sheet-i]').forEach(btn=>btn.onclick = ev=>{ ev.stopPropagation(); close(); const it = items[+btn.getAttribute('data-sheet-i')]; setTimeout(()=>it.run(), 30); });
+  document.getElementById('sheetCancel').onclick = ev=>{ ev.stopPropagation(); close(); };
+  dlg.onclick = ev=>{ if(ev.target===dlg) close(); };   // tap outside
   if(!dlg.open) dlg.showModal();
 }
 function closeGenericDialog(){
@@ -5419,7 +5724,7 @@ document.addEventListener('click', async (e)=>{
     case 'btnDeleteTournament': if(t && await confirmDialog('Delete "'+t.name+'" and everything in it? This cannot be undone.')) await deleteTournamentCascade(t.id); return;
     case 'btnNewEvent': if(t) openEventDialog(t.id); return;
     case 'btnEditEvent': { const ev=eventById(state.eventId); if(ev) openEventDialog(t.id, ev); return; }
-    case 'btnBuildEntries': { const ev=eventById(state.eventId); if(ev){ await buildEntriesFromRegistrations(ev); render(); } return; }
+    case 'btnBuildEntries': { const ev=eventById(state.eventId); if(ev){ await buildEntriesFromRegistrations(ev); if(!eventDraw(ev.id) && eventEntries(ev.id).some(e=>!e.isAmericanoTeam)){ state.eventSub='draw'; state.eventSubFor=ev.id; } render(); } return; }
     case 'btnGenerateDraw': {
       const ev = eventById(state.eventId); if(!ev) return;
       const draw = eventDraw(ev.id);
@@ -5610,6 +5915,10 @@ document.addEventListener('click', async (e)=>{
     ['data-undo-point', ()=>{ const m=matchById(state.liveMatchId); if(m) undoPoint(m).then(render); }],
     ['data-end-game', ()=>{ const m=matchById(state.liveMatchId); if(m) endGameManually(m).then(render); }],
     ['data-add-am-rounds', v=>{ const ev=eventById(v); if(ev) openAddAmericanoRoundsDialog(ev); }],
+    ['data-filter-toggle', v=>{ state.mFilterOpen = state.mFilterOpen||{}; state.mFilterOpen[v] = !state.mFilterOpen[v]; render(); }],
+    ['data-ev-sub', v=>{ state.eventSub = v; state.eventSubFor = state.eventId; render(); }],
+    ['data-am-final', v=>{ const ev=eventById(v); if(ev) openAmericanoFinalDialog(ev); }],
+    ['data-am-final-remove', async v=>{ const ev=eventById(v); if(ev){ await removeAmericanoFinal(ev); render(); } }],
     ['data-open-schedule', v=>{ const m=matchById(v); if(m) openScheduleDialog(m); }],
     ['data-open-decide', v=>{ const m=matchById(v); if(m) openDecideDialog(m); }],
     ['data-open-correct', v=>{ const m=matchById(v); if(m) openCorrectDialog(m); }],
@@ -5644,6 +5953,7 @@ document.addEventListener('click', async (e)=>{
   // itself opens on click) always wins over the outer card's own handler.
   let node = e.target;
   while(node && node.nodeType===1 && node!==document.body){
+    if(node.hasAttribute('data-more-menu')){ e.stopPropagation(); openMoreSheet(node); return; }
     for(const [attr, fn] of dataChecks){
       if(node.hasAttribute(attr)){ e.stopPropagation(); await fn(node.getAttribute(attr)); return; }
     }
@@ -5701,6 +6011,14 @@ document.addEventListener('input', (e)=>{
 
 /* ============================== POST-RENDER HOOKS / THEME ============================== */
 function postRenderHooks(){
+  const addForm = document.getElementById('tAddPlayerForm');
+  if(addForm) addForm.addEventListener('toggle', ()=>{ state.tAddOpen = addForm.open; });
+  // Keep the active tab visible in the sideways-scrolling tab strip (phones).
+  const strip = document.querySelector('.tabs'), act = strip && strip.querySelector('.tab.active');
+  if(strip && act && strip.scrollWidth > strip.clientWidth){
+    const want = act.offsetLeft - (strip.clientWidth - act.offsetWidth)/2;
+    strip.scrollLeft = Math.max(0, want);
+  }
   if((state.view==='tdetail' && state.tab==='draws') || ['draws','results'].includes(state.view)){
     requestAnimationFrame(drawAllBracketConnectors);
   }
