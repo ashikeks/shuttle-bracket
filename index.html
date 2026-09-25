@@ -519,6 +519,41 @@
     body.viewer-mode .toast-host{ bottom:calc(16px + env(safe-area-inset-bottom)); }
     .viewer-upd{ display:none; }
   }
+  .sb{ position:relative; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:11px 13px 10px; margin-bottom:10px; cursor:pointer; box-shadow:0 1px 2px rgba(20,10,60,.04); }
+  .sb.live{ border-color:var(--gold); box-shadow:0 0 0 3px color-mix(in srgb, var(--gold) 16%, transparent); }
+  .sb-meta{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 10px; font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:7px; }
+  .sb-ev{ min-width:0; text-transform:uppercase; letter-spacing:.03em; font-size:10.5px; }
+  .sb-when{ flex:none; white-space:nowrap; }
+  .sb-live{ color:var(--gold); font-weight:800; }
+  .sb-line{ position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:5px 0 5px 10px; }
+  .sb-line::before{ content:""; position:absolute; left:0; top:6px; bottom:6px; width:3px; border-radius:2px; background:transparent; }
+  .sb-line.win::before{ background:var(--court); }
+  .sb-line + .sb-line{ border-top:1px solid var(--border); }
+  .sb-nm{ min-width:0; font-size:15px; font-weight:500; color:var(--ink); overflow-wrap:anywhere; display:inline-flex; align-items:center; gap:6px; }
+  .sb-line.win .sb-nm{ font-weight:800; }
+  .sb-line.tbd .sb-nm{ color:var(--faint); font-style:italic; }
+  .sb-line.me .sb-nm{ color:var(--court); }
+  .sb-tick{ display:inline-flex; width:17px; height:17px; border-radius:50%; background:var(--court); color:#fff; align-items:center; justify-content:center; flex:none; }
+  .sb-tick svg{ width:11px; height:11px; stroke-width:3; }
+  .sb-g{ display:flex; gap:5px; flex:none; }
+  .sb-c{ min-width:32px; height:30px; padding:0 4px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; background:var(--surface-2); color:var(--muted); font-size:17px; font-weight:700; }
+  .sb-c.w{ background:color-mix(in srgb, var(--court) 13%, var(--surface)); color:var(--ink); font-weight:800; }
+  .sb-c.cur{ background:var(--gold); color:#fff; }
+  .sb-acts{ display:flex; align-items:center; gap:6px; margin-top:9px; padding-top:9px; border-top:1px dashed var(--border); flex-wrap:wrap; }
+  .sb-acts .grow{ flex:1; }
+  .sb-ic svg{ width:15px; height:15px; }
+  .sb-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:0 12px; align-items:start; }
+  @media (max-width:700px){ .sb-grid{ grid-template-columns:minmax(0,1fr); } }
+  .sb.me-match{ border-color:var(--court); }
+  .m-slot .mc-g{ display:inline-flex; gap:3px; }
+  .mc-c{ min-width:26px; height:24px; padding:0 3px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; background:var(--surface-2); color:var(--muted); font-size:14px; font-weight:700; }
+  .mc-c.w{ background:color-mix(in srgb, var(--court) 13%, var(--surface)); color:var(--ink); font-weight:800; }
+  .mc-c.cur{ background:var(--gold); color:#fff; }
+  .setup-tabs{ display:flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:12px; margin:0 0 14px; overflow-x:auto; scrollbar-width:none; }
+  .setup-tabs::-webkit-scrollbar{ display:none; }
+  .setup-tabs button{ flex:1; border:none; background:transparent; color:var(--muted); padding:9px 10px; border-radius:9px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  .setup-tabs button svg{ width:15px; height:15px; }
+  .setup-tabs button.active{ background:var(--surface); color:var(--court); box-shadow:var(--shadow); }
   .vm-row{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
   .vm-row.live{ border-color:var(--gold); box-shadow:0 0 0 3px color-mix(in srgb, var(--gold) 14%, transparent); }
   .vm-meta{ display:flex; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--muted); margin-bottom:6px; }
@@ -628,9 +663,10 @@
   .ev-subtabs button{ flex:1; border:none; background:transparent; color:var(--muted); padding:9px 6px; border-radius:9px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
   .ev-subtabs button.active{ background:var(--surface); color:var(--court); box-shadow:var(--shadow); }
   .ev-subtabs .n{ font-weight:600; color:var(--faint); margin-left:3px; }
-  .court-chip .cc-name{ display:inline-flex; align-items:center; gap:6px; min-width:0; }
+  .court-chip .cc-name{ display:inline-flex; align-items:center; gap:6px; min-width:0; white-space:nowrap; }
+  .court-chip .pill.live{ padding:1px 6px; font-size:10px; }
   .court-chip .cc-actions{ display:inline-flex; gap:4px; margin-left:auto; }
-  .court-chip .cc-actions .icon-btn{ width:30px; height:30px; }
+  .court-chip .cc-actions .icon-btn{ width:28px; height:28px; }
   .court-chip .cc-actions .icon-btn svg{ width:15px; height:15px; }
   .m-details > summary{ list-style:none; cursor:pointer; }
   .m-details > summary svg{ width:15px; height:15px; flex:none; }
@@ -664,6 +700,10 @@
     .tab{ flex:none; padding:11px 12px 10px; font-size:13.5px; font-weight:600; text-transform:none; letter-spacing:0; border-radius:0; background:none; box-shadow:none; border-bottom:2.5px solid transparent; margin-bottom:-1px; white-space:nowrap; }
     .tab.active{ background:none; box-shadow:none; color:var(--court); border-bottom-color:var(--court); font-weight:700; }
 
+    .setup-tabs button{ padding:9px 4px; font-size:12.5px; }
+    .m-slot{ font-size:14px; padding:8px 10px; }
+    .m-slot.winner .name{ font-weight:800; }
+    .setup-tabs button svg{ display:none; }
     /* quieter toolbars */
     .filter-bar{ gap:6px; margin-bottom:12px; }
     .filter-bar .m-adv{ display:none !important; }
@@ -976,7 +1016,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260925.190336';
+const APP_BUILD = '20260925.193733';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3977,7 +4017,7 @@ function renderTournamentsList(){
 
 /* ---------- TOURNAMENT DETAIL ---------- */
 function tabsForRole(){
-  if(state.role==='admin') return [['overview','Overview'],['events','Events'],['players','Players'],['draws','Draws'],['matches','Matches'],['schedule','Schedule'],['courts','Courts'],['results','Results']];
+  if(state.role==='admin') return [['overview','Overview'],['events','Events'],['matches','Matches'],['schedule','Schedule'],['results','Results'],['settings','Settings']];
   if(state.role==='player') return [['overview','Overview'],['mymatches','My Matches'],['draws','Draws'],['results','Results'],['register','Register']];
   const pub = [['overview','Overview'],['live','Live'],['schedule','Schedule'],['draws','Draws'],['results','Results'],['players','Players']];
   if(!VIEWER) return pub;
@@ -3989,7 +4029,13 @@ function renderTournamentDetail(){
   const t = currentTournament();
   if(!t) return `<div class="empty-tab">Select a tournament from the sidebar, or <button class="btn btn-sm" id="btnGoTournaments" style="margin-left:6px">browse tournaments</button>.</div>`;
   const tabs = tabsForRole();
-  if(!tabs.find(x=>x[0]===state.tab)) state.tab = VIEWER ? viewerDefaultTab(t) : tabs[0][0];
+  const admin = state.role==='admin' && !VIEWER;
+  // Draws, Players, Courts and General live under the Settings tab (their own keys stay valid).
+  if(admin && state.tab==='settings') state.tab = state.setupTab || 'draws';
+  const inSetup = admin && SETUP_TABS.some(x=>x[0]===state.tab);
+  if(inSetup) state.setupTab = state.tab;
+  if(!inSetup && !tabs.find(x=>x[0]===state.tab)) state.tab = VIEWER ? viewerDefaultTab(t) : tabs[0][0];
+  const topTab = inSetup ? 'settings' : state.tab;
   const backView = 'tournaments';
   return `
     ${VIEWER?'':`<button class="back-link mobile-only" data-nav="${backView}">${ICONS.back} Tournaments</button>`}
@@ -4004,12 +4050,17 @@ function renderTournamentDetail(){
       </div>` : (!VIEWER && isShareLive(t) ? `<div class="t-actions"><button class="btn btn-sm" id="btnShareTournament">${ICONS.share} Share</button></div>` : '')}
     </div>
     ${VIEWER ? renderFollowBar() : ''}
-    <div class="tabs">${tabs.map(([k,label])=>`<button class="tab ${state.tab===k?'active':''}" data-tab="${k}">${esc(label)}</button>`).join('')}</div>
-    <div id="tabBody">${renderTabBody(t)}</div>
+    <div class="tabs">${tabs.map(([k,label])=>`<button class="tab ${topTab===k?'active':''}" data-tab="${k}">${esc(label)}</button>`).join('')}</div>
+    <div id="tabBody">${inSetup ? renderSetupTabs() : ''}${renderTabBody(t)}</div>
   `;
+}
+const SETUP_TABS = [['draws','Draws','trophy'],['players','Players','users'],['courts','Courts','court'],['general','General','edit']];
+function renderSetupTabs(){
+  return `<div class="setup-tabs" role="tablist">${SETUP_TABS.map(([k,l,ic])=>`<button type="button" role="tab" class="${state.tab===k?'active':''}" data-tab="${k}">${ICONS[ic]||''}${l}</button>`).join('')}</div>`;
 }
 function renderTabBody(t){
   switch(state.tab){
+    case 'general': return renderTournamentGeneralSettings(t);
     case 'overview': return renderOverviewTab(t);
     case 'follow': return renderFollowTab(t);
     case 'upcoming': return renderViewerUpcoming(t);
@@ -4080,20 +4131,8 @@ function winnerLabel(m){
   const w = entryById(m.winnerEntryId);
   return w ? esc(entryName(w)) + ' won' : '';
 }
-function renderMatchListRow(m){
-  const ev = eventById(m.eventId);
-  const e1 = entryById(m.entry1Id), e2 = entryById(m.entry2Id);
-  const score = (m.games||[]).map(g=>g.a+'-'+g.b).join(', ');
-  const court = courtById(m.courtId);
-  const wl = winnerLabel(m);
-  return `<div class="list-row" data-open-match="${m.id}">
-    <span class="pill">${esc((ev||{}).name||'')}</span>
-    <span class="grow"><span class="main-txt">${e1&&m.winnerEntryId===e1.id?'<b>'+esc(entryName(e1))+'</b>':esc(entryName(e1))} <span style="color:var(--faint)">vs</span> ${e2&&m.winnerEntryId===e2.id?'<b>'+esc(entryName(e2))+'</b>':esc(entryName(e2))}</span>
-      <div class="sub-txt">${esc(roundLabelForMatch(m))}${court?' &middot; '+esc(court.name):''}${m.scheduledStart?' &middot; '+esc(fmtDateTime(m.scheduledStart)):''}${wl?' &middot; <span style="color:var(--court);font-weight:600">'+wl+'</span>':''}</div></span>
-    ${score?`<span class="mono sub-txt">${esc(score)}</span>`:''}
-    ${matchStatusPill(m)}
-  </div>`;
-}
+function renderMatchListRow(m){ return renderScoreboard(m, {}); }
+
 function matchStatusPill(m){
   const map = {scheduled:'',called:'gold',in_progress:'live',completed:'court',walkover:'gold',retired:'danger',cancelled:'danger',postponed:'danger',bye:'gold',pending:''};
   return `<span class="pill ${map[m.status]||''}">${m.status==='in_progress'?'&#9679; LIVE':esc((m.status||'').replace(/_/g,' '))}</span>`;
@@ -4229,13 +4268,18 @@ function renderBracketColumns(matches, containerId, editable){
   }).join('');
   return `<div class="bracket-wrap"><div class="bracket" id="${containerId}"><svg class="bracket-lines" id="${containerId}Lines"></svg>${cols}</div></div>`;
 }
+function bracketScoreCells(m, key){
+  const live = m.status==='in_progress';
+  return `<span class="score mono mc-g">${(m.games||[]).map((g,i)=>{ const w=ScoreRules.gameWinner(g); const won=(w===1&&key==='a')||(w===2&&key==='b'); const cur = live && i===m.games.length-1 && !w;
+    return `<span class="mc-c ${won?'w':''} ${cur?'cur':''}">${g[key]}</span>`; }).join('')}</span>`;
+}
 function renderMatchCard(m, maxRound, editable){
   const e1=entryById(m.entry1Id), e2=entryById(m.entry2Id);
   const playable = e1 && e2 && !['completed','bye','cancelled'].includes(m.status);
   const w = m.winnerEntryId;
   return `<div class="match-card ${playable&&editable?'playable':''}" data-match-id="${m.id}" ${m.nextMatchId?`data-next="${m.nextMatchId}"`:''} ${playable&&editable?`data-open-live="${m.id}"`:''} ${!playable?`data-open-match="${m.id}"`:''}>
-    <div class="m-slot ${!e1?'tbd':''} ${w&&w===m.entry1Id?'winner':''}"><span class="name">${e1?esc(entryName(e1)):'TBD'}</span>${e1&&m.games&&m.games.length?`<span class="score mono">${m.games.map(g=>g.a).join('-')}</span>`:''}</div>
-    <div class="m-slot ${!e2?'tbd':''} ${w&&w===m.entry2Id?'winner':''}"><span class="name">${e2?esc(entryName(e2)):'TBD'}</span>${e2&&m.games&&m.games.length?`<span class="score mono">${m.games.map(g=>g.b).join('-')}</span>`:''}</div>
+    <div class="m-slot ${!e1?'tbd':''} ${w&&w===m.entry1Id?'winner':''}"><span class="name">${e1?esc(entryName(e1)):'TBD'}</span>${e1&&m.games&&m.games.length?bracketScoreCells(m,'a'):''}</div>
+    <div class="m-slot ${!e2?'tbd':''} ${w&&w===m.entry2Id?'winner':''}"><span class="name">${e2?esc(entryName(e2)):'TBD'}</span>${e2&&m.games&&m.games.length?bracketScoreCells(m,'b'):''}</div>
     <div class="m-status ${m.status==='bye'?'bye':''} ${m.status==='in_progress'?'live':''}">${m.status==='bye'?'Bye':m.status==='in_progress'?'Live':m.status==='completed'?'Final':m.status==='walkover'?'Walkover':(m.scheduledStart?esc(fmtTime(m.scheduledStart)):'TBD')}</div>
   </div>`;
 }
@@ -4247,7 +4291,7 @@ function renderStandingsTable(rows){
 }
 function renderRoundRobinMatchList(matches, editable, sitOutByRound){
   const byRound={}; matches.forEach(m=>(byRound[m.round]=byRound[m.round]||[]).push(m));
-  const rowFn = editable ? renderMatchRowActionable : renderMatchListRow;
+  const rowFn = m=>renderScoreboard(m, {actions: editable && state.role==='admin', hideEvent:true});
   return Object.keys(byRound).map(Number).sort((a,b)=>a-b).map(r=>{
     const sit = (sitOutByRound && sitOutByRound[r]) || [];
     return `
@@ -4306,7 +4350,7 @@ function renderAmericanoFinalCard(ev, fin, editable){
     return `<div class="am-final-card no-print"><div class="row-h"><h4>Final</h4><button class="btn btn-sm btn-primary" data-am-final="${ev.id}">Create final</button></div>
       <div class="helptext">${ready ? 'All rounds are scored. Pick the top four players for a final.' : 'When the rounds are done, the top four can play a final for the title.'}</div></div>`;
   }
-  const rowFn = editable ? renderMatchRowActionable : renderMatchListRow;
+  const rowFn = m=>renderScoreboard(m, {actions: editable && state.role==='admin', hideEvent:true});
   const w = fin.winnerEntryId && entryById(fin.winnerEntryId);
   const sc = scoringFor(ev, tournamentById(ev.tournamentId), fin);
   return `<div class="am-final-card"><div class="row-h"><h4>Final</h4>${isAdmin && fin.status!=='completed' ? `<button class="btn btn-sm btn-ghost no-print" data-am-final-remove="${ev.id}">Remove</button>`:''}</div>
@@ -4406,33 +4450,54 @@ function renderMatchesTab(t){
     ${renderFilterBar(t,'matches',{more: moreMenuBtn()})}
     <div class="export-row no-print"><button class="btn btn-sm m-overflow" id="btnExportSchedule">${ICONS.download} Export schedule CSV</button><button class="btn btn-sm m-overflow" id="btnExportResults">${ICONS.download} Export results CSV</button></div>
     </div>
-    ${matches.length ? matches.map(m=>renderMatchRowActionable(m)).join('') : `<div class="empty-tab">No matches match these filters.</div>`}
+    ${matches.length ? `<div class="sb-grid">${matches.map(m=>renderMatchRowActionable(m)).join('')}</div>` : `<div class="empty-tab">No matches match these filters.</div>`}
   `;
 }
-function renderMatchRowActionable(m){
-  const ev = eventById(m.eventId);
-  const e1=entryById(m.entry1Id), e2=entryById(m.entry2Id);
-  const court = courtById(m.courtId);
-  const score = (m.games||[]).map(g=>g.a+'-'+g.b).join(', ');
-  const canPlay = e1 && e2 && !['completed','bye','cancelled'].includes(m.status);
-  const canDecide = e1 && e2 && !['completed','bye','cancelled'].includes(m.status);
-  const wl = winnerLabel(m);
-  return `<div class="list-row">
-    <span class="pill">${esc((ev||{}).name||'')}</span>
-    <span class="grow"><span class="main-txt">${e1&&m.winnerEntryId===e1.id?'<b>'+esc(entryName(e1))+'</b>':esc(entryName(e1))} <span style="color:var(--faint)">vs</span> ${e2&&m.winnerEntryId===e2.id?'<b>'+esc(entryName(e2))+'</b>':esc(entryName(e2))}</span>
-      <div class="sub-txt">${esc(roundLabelForMatch(m))}${court?' &middot; '+esc(court.name):''}${m.scheduledStart?' &middot; '+esc(fmtDateTime(m.scheduledStart)):''}${wl?' &middot; <span style="color:var(--court);font-weight:600">'+wl+'</span>':''}</div></span>
-    ${score?`<span class="mono sub-txt">${esc(score)}</span>`:''}
-    ${matchStatusPill(m)}
-    ${state.role==='admin' ? `<div class="row no-print" style="gap:6px">
-      ${canPlay?`<button class="btn btn-sm btn-primary" data-open-live="${m.id}">Score</button>`:''}
-      <button class="btn btn-sm" data-open-schedule="${m.id}">${ICONS.calendar}</button>
-      ${canDecide?`<button class="btn btn-sm" data-open-decide="${m.id}">W/O</button>`:''}
-      ${m.status==='completed'?`<button class="btn btn-sm" data-open-correct="${m.id}">${ICONS.edit}</button>`:''}
-    </div>` : ''}
+function renderMatchRowActionable(m){ return renderScoreboard(m, {actions: state.role==='admin'}); }
+/* One scoreboard card for every match list: event and round on top, then one
+   line per side - names on the left, a score cell per game on the right.
+   The winning side is bold with an accent bar; a live match highlights the
+   game being played. opts.actions adds the admin buttons underneath. */
+function renderScoreboard(m, opts){
+  opts = opts||{};
+  const ev = eventById(m.eventId), court = courtById(m.courtId);
+  const e1 = entryById(m.entry1Id), e2 = entryById(m.entry2Id);
+  const live = m.status==='in_progress', done = ['completed','walkover','retired'].includes(m.status);
+  const games = m.games||[];
+  const fp = followedPlayer();
+  const cell = (g,i,key)=>{
+    const other = key==='a'?'b':'a', w = ScoreRules.gameWinner(g);
+    const won = (w===1 && key==='a') || (w===2 && key==='b');
+    const cur = live && i===games.length-1 && !w;
+    return `<span class="sb-c ${won?'w':''} ${cur?'cur':''}">${g[key]}</span>`;
+  };
+  const line = (e, key)=>{
+    const won = done && e && m.winnerEntryId===e.id;
+    const me = fp && e && entryPlayerIds(e).includes(fp.id);
+    return `<div class="sb-line ${won?'win':''} ${me?'me':''} ${!e?'tbd':''}">
+      <span class="sb-nm">${e?esc(entryName(e)):'TBD'}${won?`<span class="sb-tick" aria-label="winner">${ICONS.check}</span>`:''}</span>
+      <span class="sb-g mono">${games.map((g,i)=>cell(g,i,key)).join('')}</span></div>`;
+  };
+  const status = live ? `<span class="sb-live">&#9679; LIVE</span>`
+    : m.status==='walkover' ? 'Walkover' : m.status==='retired' ? 'Retired' : done ? 'Final'
+    : ['cancelled','postponed','bye'].includes(m.status) ? esc(m.status.replace(/_/g,' '))
+    : opts.hideTime ? '' : (m.scheduledStart ? esc(fmtDateTime(m.scheduledStart)) : 'Not scheduled');
+  const e1ok = e1 && e2;
+  const canPlay = e1ok && !['completed','bye','cancelled'].includes(m.status);
+  const acts = opts.actions ? `<div class="sb-acts no-print">
+      ${canPlay?`<button class="btn btn-sm btn-primary" data-open-live="${m.id}">${live?'Update score':'Score'}</button>`:''}
+      ${m.status==='completed'?`<button class="btn btn-sm" data-open-correct="${m.id}">${ICONS.edit} Edit score</button>`:''}
+      <span class="grow"></span>
+      <button class="btn btn-sm sb-ic" data-open-schedule="${m.id}" title="Schedule" aria-label="Schedule">${ICONS.calendar}</button>
+      ${canPlay?`<button class="btn btn-sm" data-open-decide="${m.id}" title="Walkover or retirement">W/O</button>`:''}
+    </div>` : '';
+  return `<div class="sb ${live?'live':''} ${done?'done':''}" data-match-id="${m.id}" data-open-match="${m.id}">
+    <div class="sb-meta"><span class="sb-ev">${opts.hideEvent?'':esc((ev||{}).name||'')+' &middot; '}${esc(roundLabelForMatch(m))}</span><span class="sb-when">${[court?esc(court.name):'', status].filter(Boolean).join(' &middot; ')}</span></div>
+    ${line(e1,'a')}${line(e2,'b')}
+    ${acts}
   </div>`;
 }
 
-/* ---------- SCHEDULE TAB ---------- */
 function renderScheduleTab(t){
   const f = state.filters.schedule = state.filters.schedule||{};
   const matches = applyMatchFilters(tMatches(t.id), f).filter(m=>m.scheduledStart);
@@ -4451,12 +4516,7 @@ function renderScheduleTab(t){
     <div class="sched-list">${times.map(time=>`<div class="sched-list-time">${esc(fmtDateTime(time))}</div>${courts.map(c=>{
       const m = grid[time] && grid[time][c.id];
       if(!m) return '';
-      return `<div class="list-row ${m.status==='in_progress'?'live':''}" data-open-match="${m.id}">
-        <span class="pill">${esc(c.name)}</span>
-        <span class="grow"><span class="main-txt">${esc(entryName(entryById(m.entry1Id)))} <span style="color:var(--faint)">vs</span> ${esc(entryName(entryById(m.entry2Id)))}</span>
-          <div class="sub-txt">${esc(eventById(m.eventId)?.name||'')}</div></span>
-        ${matchStatusPill(m)}
-      </div>`;
+      return renderScoreboard(m, {hideTime:true});
     }).join('')}`).join('')}</div>
     <div class="sched-scroll"><table class="sched-grid"><thead><tr><th>Time</th>${courts.map(c=>`<th>${esc(c.name)}</th>`).join('')}</tr></thead>
     <tbody>${times.map(time=>`<tr><td class="sched-time-col">${esc(fmtDateTime(time))}</td>${courts.map(c=>{
@@ -4648,24 +4708,8 @@ function viewerEventFilter(t){
   return `<div class="filter-bar"><select data-filter="vw.eventId" aria-label="Event"><option value="">All events</option>${evs.map(e=>`<option value="${e.id}" ${f.eventId===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}</select></div>`;
 }
 /* A two-line scoreboard row: event and round on top, one line per side with game scores. */
-function renderViewerMatch(m, hideTime){
-  const ev = eventById(m.eventId), court = courtById(m.courtId);
-  const e1 = entryById(m.entry1Id), e2 = entryById(m.entry2Id);
-  const live = m.status==='in_progress', done = VM_DONE.includes(m.status);
-  const games = m.games||[];
-  const fp = followedPlayer();
-  const side = (e, key, won)=>`<div class="vm-side ${won?'win':''} ${fp && e && entryPlayerIds(e).includes(fp.id)?'me':''}">
-      <span class="vm-nm">${esc(entryName(e))}</span>
-      <span class="vm-sc mono">${games.map((g,i)=>`<span class="${live&&i===games.length-1?'cur':''}">${g[key]}</span>`).join('')}</span></div>`;
-  const when = live ? `<span class="vm-live">&#9679; LIVE</span>`
-    : done ? `<span>${m.status==='walkover'?'Walkover':m.status==='retired'?'Retired':'Final'}</span>`
-    : hideTime ? '' : `<span>${m.scheduledStart?esc(fmtDateTime(m.scheduledStart)):'Time TBC'}</span>`;
-  return `<div class="vm-row ${live?'live':''}" data-open-match="${m.id}">
-    <div class="vm-meta"><span class="vm-ev">${esc((ev||{}).name||'')} &middot; ${esc(roundLabelForMatch(m))}</span><span class="vm-when">${[court?esc(court.name):'', when].filter(Boolean).join(' &middot; ')}</span></div>
-    ${side(e1,'a', done && m.winnerEntryId===m.entry1Id)}
-    ${side(e2,'b', done && m.winnerEntryId===m.entry2Id)}
-  </div>`;
-}
+function renderViewerMatch(m, hideTime){ return renderScoreboard(m, {hideTime}); }
+
 function renderViewerUpcoming(t){
   const l = viewerMatchLists(t).upcoming;
   if(!l.length) return followNote() + viewerEventFilter(t) + `<div class="empty-tab">No more matches to play${followedPlayer()?' for '+esc(followedPlayer().name):''}.</div>`;
@@ -4903,14 +4947,14 @@ function renderDataSettingsCard(){
     </div>`;
 }
 function renderSettingsView(){
-  const t = currentTournament();
-  if(!t) return `<div class="t-header"><div><h2>Settings</h2><div class="t-sub">App settings</div></div></div>
+  return `<div class="t-header"><div><h2>Settings</h2><div class="t-sub">App settings</div></div></div>
     ${renderShareSettingsCard()}
     ${renderDataSettingsCard()}
-    <div class="empty-tab">Open a tournament to edit its scoring and logistics here.</div>`;
+    <div class="helptext" style="text-align:center;margin:10px 0">A tournament's scoring, courts and rest times are under that tournament &rarr; Settings &rarr; General.</div>`;
+}
+function renderTournamentGeneralSettings(t){
   const sc = t.scoring||DEFAULT_SCORING;
   return `
-    <div class="t-header"><div><h2>Settings</h2><div class="t-sub">${esc(t.name)}</div></div></div>
     <div class="card">
       <h3 style="font-family:'Public Sans';font-size:14px;text-transform:none;letter-spacing:0;margin-bottom:8px">Default scoring</h3>
       <div class="field-row">
@@ -4940,12 +4984,8 @@ function renderSettingsView(){
       </select></div>
       <button class="btn btn-primary btn-sm" id="btnSaveLogistics" style="margin-top:10px">Save</button>
     </div>
-    ${renderShareSettingsCard()}
-    ${renderDataSettingsCard()}
   `;
 }
-
-/* ---------- PLAYER: HOME / MY TOURNAMENTS / MY MATCHES / PROFILE ---------- */
 function renderPlayerHome(){
   const me = myPlayer();
   if(!me) return renderChoosePlayerPrompt();
