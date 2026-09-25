@@ -439,6 +439,7 @@
   .fm-row .wl.next{ background:var(--court-soft); color:var(--court); }
   .fm-row .fm-score{ font-weight:700; font-size:13px; text-align:right; flex:none; max-width:36%; line-height:1.35; }
   .fm-row .fm-score span{ display:inline-block; white-space:nowrap; }
+  .ko-scoring{ margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
   .dlg-section{ font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:14px 0 6px; padding-top:12px; border-top:1px solid var(--border); }
   .score-summary.won{ font-size:13px; color:var(--court); font-weight:700; }
 
@@ -1481,6 +1482,13 @@ function propagateWinnerOnly(m, byId){
     if(m.nextMatchSlot===1) nxt.entry1Id = m.winnerEntryId; else nxt.entry2Id = m.winnerEntryId;
   }
 }
+/* A slot is still "waiting" while any match that feeds it (winner or loser) is
+   undecided. Only a slot that can never be filled makes a real bye. */
+const DECIDED_STATUSES = ['completed','walkover','retired','bye','cancelled'];
+function slotAwaitsFeeder(m, slot, list){
+  return list.some(f=> f.id!==m.id && !DECIDED_STATUSES.includes(f.status) &&
+    ((f.nextMatchId===m.id && f.nextMatchSlot===slot) || (f.loserNextMatchId===m.id && f.loserNextMatchSlot===slot)));
+}
 function resolveByeCascade(list){
   const byId = Object.fromEntries(list.map(m=>[m.id,m]));
   let changed=true, guard=0;
@@ -1489,7 +1497,7 @@ function resolveByeCascade(list){
     for(const m of list){
       if(m.status==='bye' || m.status==='completed') continue;
       const has1=!!m.entry1Id, has2=!!m.entry2Id;
-      if(has1!==has2){
+      if(has1!==has2 && !slotAwaitsFeeder(m, has1?2:1, list)){
         m.status='bye';
         m.winnerEntryId = has1 ? m.entry1Id : m.entry2Id;
         propagateWinnerOnly(m, byId);
@@ -2183,7 +2191,9 @@ function followNote(){
   const p = followedPlayer(); if(!p) return '';
   return `<div class="follow-note">${ICONS.user}<span>Showing <b>${esc(p.name)}</b> only</span><button type="button" class="btn btn-sm" id="btnUnfollow">Show everyone</button></div>`;
 }
-function scoringFor(event, tournament){
+function isKnockoutStageMatch(event, match){ return !!(event && match && event.drawFormat==='group_knockout' && match.bracket && match.bracket!=='GRP'); }
+function scoringFor(event, tournament, match){
+  if(isKnockoutStageMatch(event, match) && event.knockoutScoring) return event.knockoutScoring;
   if(event && event.drawFormat==='americano'){
     // Americano is always one game per match; without its own rule it uses badminton scoring.
     const sc = event.scoringOverride;
@@ -2473,7 +2483,7 @@ async function createEvent(tournamentId, data){
   return act(async ()=> Store.add('events', {
     tournamentId, name:data.name, type:data.type||'singles', ageGroup:data.ageGroup||'none',
     maxParticipants:data.maxParticipants||32, drawFormat:data.drawFormat||'single_elimination',
-    thirdPlaceMatch: !!data.thirdPlaceMatch, scoringOverride: data.scoringOverride||null,
+    thirdPlaceMatch: !!data.thirdPlaceMatch, scoringOverride: data.scoringOverride||null, knockoutScoring: data.knockoutScoring||null,
     americanoVariant: data.americanoVariant||'classic', status:'registration_open'
   }), 'Event added');
 }
@@ -2752,6 +2762,9 @@ async function maybeResolveByeLive(matchId){
   if(!m || m.status==='completed' || m.status==='bye') return;
   const has1=!!m.entry1Id, has2=!!m.entry2Id;
   if(has1!==has2){
+    // The other player may still be coming from an unfinished match: wait for it.
+    const list = state.matches.filter(x=>x.eventId===m.eventId && x.drawId===m.drawId);
+    if(slotAwaitsFeeder(m, has1?2:1, list)) return;
     const winnerEntryId = has1?m.entry1Id:m.entry2Id;
     await Store.update('matches', matchId, {status:'bye', winnerEntryId});
     if(m.nextMatchId){
@@ -2762,6 +2775,57 @@ async function maybeResolveByeLive(matchId){
       }
     }
   }
+}
+/* Draws made before the fix could have semi-finals/finals wrongly marked "Bye"
+   (the first finalist was pushed through before the other match was played).
+   This puts those matches back to playable and takes the wrongly advanced
+   player out of the next round again. Matches already played are left alone. */
+async function repairFalseByes(){
+  if(VIEWER) return 0;
+  const PLAYED = ['completed','walkover','retired','in_progress'];
+  const groups = {};
+  state.matches.forEach(m=>{ const k=(m.eventId||'')+'|'+(m.drawId||''); (groups[k]=groups[k]||[]).push(Object.assign({}, m)); });
+  const patches = {};   // matchId -> patch
+  const touchedEvents = new Set();
+  for(const list of Object.values(groups)){
+    if(!list.some(m=>m.status==='bye')) continue;
+    const byId = Object.fromEntries(list.map(m=>[m.id,m]));
+    const hasFeeder = m => list.some(f=>f.nextMatchId===m.id || f.loserNextMatchId===m.id);
+    const isFalse = m => {
+      if(m.status!=='bye' || !hasFeeder(m)) return false;
+      const n = (m.entry1Id?1:0) + (m.entry2Id?1:0);
+      if(n===2 || n===0) return true;
+      return slotAwaitsFeeder(m, m.entry1Id?2:1, list);
+    };
+    let guard=0, changed=true;
+    while(changed && guard++<60){
+      changed=false;
+      for(const m of list){
+        if(!isFalse(m)) continue;
+        const next = m.nextMatchId ? byId[m.nextMatchId] : null;
+        if(next && PLAYED.includes(next.status)) continue;          // the next round was already played: leave it
+        const oldWinner = m.winnerEntryId;
+        m.status = (m.entry1Id && m.entry2Id) ? 'scheduled' : 'pending'; m.winnerEntryId = null;
+        patches[m.id] = Object.assign(patches[m.id]||{}, {status:m.status, winnerEntryId:null});
+        if(next && oldWinner){
+          const field = m.nextMatchSlot===1 ? 'entry1Id' : 'entry2Id';
+          if(next[field]===oldWinner){
+            next[field] = null;
+            const p2 = {[field]: null};
+            if(next.status==='scheduled'){ next.status='pending'; p2.status='pending'; }
+            patches[next.id] = Object.assign(patches[next.id]||{}, p2);
+          }
+        }
+        touchedEvents.add(m.eventId);
+        changed = true;
+      }
+    }
+  }
+  const ids = Object.keys(patches);
+  if(!ids.length) return 0;
+  for(const id of ids) await Store.update('matches', id, Object.assign({updatedAt: nowIso()}, patches[id]));
+  for(const eid of touchedEvents){ const ev = eventById(eid); if(ev && ev.status==='completed') await Store.update('events', eid, {status:'in_progress'}); }
+  return ids.length;
 }
 async function maybeCreateBracketReset(gf1){
   const already = state.matches.find(m=> m.grKind==='gf2' && m.drawId===gf1.drawId);
@@ -2805,7 +2869,7 @@ function gamesPlayedCount(match){
   return (match.games||[]).filter(g=>ScoreRules.gameWinner(g)).length;
 }
 async function addPoint(match, side){
-  const cfg = scoringFor(eventById(match.eventId), tournamentById(match.tournamentId));
+  const cfg = scoringFor(eventById(match.eventId), tournamentById(match.tournamentId), match);
   let games = (match.games||[]).map(g=>({...g, log:(g.log||[]).slice()}));
   if(!games.length || ScoreRules.gameWinner(games[games.length-1], cfg)) games.push({a:0,b:0,log:[]});
   const g = games[games.length-1];
@@ -2860,7 +2924,7 @@ async function cancelMatch(match, reason){
   });
 }
 async function correctScore(match, games){
-  const cfg = scoringFor(eventById(match.eventId), tournamentById(match.tournamentId));
+  const cfg = scoringFor(eventById(match.eventId), tournamentById(match.tournamentId), match);
   const winner = ScoreRules.matchWinner(games, cfg);
   if(!winner){ toast('Corrected score does not produce a valid winner', true); return; }
   await completeMatch(match, {status:'completed', winnerEntryId: winner===1?match.entry1Id:match.entry2Id, games}, {forceCorrection:true});
@@ -3713,6 +3777,7 @@ function renderEventDetailAdmin(t, ev){
         </select></div>
         <div class="field" id="fGroupSizeWrap" ${ev.drawFormat!=='group_knockout'?'hidden':''}><label>Group size</label><input type="number" id="fGroupSize" min="3" max="6" value="${(draw&&draw.groupSize)||4}"></div>
       </div>
+      ${ev.drawFormat==='group_knockout'?`<div class="helptext" style="margin-bottom:8px">Scoring &middot; groups: <b>${esc(describeScoring(scoringFor(ev, t, {bracket:'GRP'})))}</b> &middot; knockout: <b>${esc(describeScoring(scoringFor(ev, t, {bracket:'SE'})))}</b> - change it from Edit event.</div>`:''}
       ${ev.drawFormat==='americano'?`<div class="helptext" style="margin-bottom:8px">Americano variant: <b>${esc((ev.americanoVariant||'classic').replace(/^./,c=>c.toUpperCase()))}</b> &middot; ${esc(describeScoring(scoringFor(ev, t)))} - change it from Edit event.</div>`:''}
       ${ev.drawFormat==='americano' && (ev.americanoVariant||'classic')==='classic' ? (()=>{
         const nPlayers = entries.length || regs.filter(r=>r.status==='confirmed').length;
@@ -4417,7 +4482,7 @@ function renderGlobalLive(){
 /* ---------- LIVE SCORING SCREEN ---------- */
 function renderLiveScoringScreen(m){
   const ev = eventById(m.eventId), t = tournamentById(m.tournamentId);
-  const cfg = scoringFor(ev, t);
+  const cfg = scoringFor(ev, t, m);
   const e1=entryById(m.entry1Id), e2=entryById(m.entry2Id);
   const games = m.games||[];
   const openGame = games.length && !ScoreRules.gameWinner(games[games.length-1],cfg);
@@ -4673,6 +4738,7 @@ function openEventDialog(tid, existing){
   const tDefault = (t && t.scoring) || DEFAULT_SCORING;
   const hasOverride = !!ev.scoringOverride;
   const sc = ev.scoringOverride || tDefault;
+  const ko = ev.knockoutScoring || sc;
   const isAM = (ev.drawFormat||'single_elimination')==='americano';
   const amVariant = ev.americanoVariant||'classic';
   const amPoints = americanoPointsFromScoring(ev.scoringOverride);
@@ -4719,6 +4785,21 @@ function openEventDialog(tid, existing){
         </div>
         <label class="row" style="font-size:12.5px;gap:6px"><input type="checkbox" id="fEDeuce" ${sc.deuceEnabled?'checked':''}> Deuce enabled (win by margin above)</label>
       </div>
+      <div id="fEKOWrap" class="ko-scoring" ${(ev.drawFormat||'')==='group_knockout'?'':'hidden'}>
+        <label class="row" style="font-size:12.5px;gap:6px;margin-bottom:6px"><input type="checkbox" id="fEUseKO" ${ev.knockoutScoring?'checked':''}> Different scoring for the knockout stage</label>
+        <div class="helptext" style="margin-bottom:8px">Group matches use the rules above. Knockout matches (quarter-finals, semi-finals, final) use these.</div>
+        <div id="fEKOFields" ${ev.knockoutScoring?'':'hidden'}>
+          <div class="field-row">
+            <div class="field"><label>Best of</label><select id="fEKOBestOf">${[1,3,5].map(n=>`<option value="${n}" ${ko.bestOf===n?'selected':''}>${n}</option>`).join('')}</select></div>
+            <div class="field"><label>Points to win</label><input type="number" id="fEKOPointsToWin" value="${ko.pointsToWin}"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Win by</label><input type="number" id="fEKOWinBy" value="${ko.winBy}"></div>
+            <div class="field"><label>Cap points</label><input type="number" id="fEKOCapPoints" value="${ko.capPoints}"></div>
+          </div>
+          <label class="row" style="font-size:12.5px;gap:6px"><input type="checkbox" id="fEKODeuce" ${ko.deuceEnabled?'checked':''}> Deuce enabled (win by margin above)</label>
+        </div>
+      </div>
     </div>
   `;
   openDialog(existing?'Edit event':'New event', body, stdFoot('btnSaveEventDlg', existing?'Save':'Add'));
@@ -4748,7 +4829,9 @@ function openEventDialog(tid, existing){
   if(formatEl) formatEl.addEventListener('change', ()=>{
     const isNowAM = formatEl.value==='americano';
     amCard.hidden = !isNowAM; scoringCard.hidden = isNowAM;
+    document.getElementById('fEKOWrap').hidden = formatEl.value!=='group_knockout';
   });
+  document.getElementById('fEUseKO').addEventListener('change', e=>{ document.getElementById('fEKOFields').hidden = !e.target.checked; });
   const useCustomEl = document.getElementById('fEUseCustomScoring');
   const customFieldsEl = document.getElementById('fECustomScoringFields');
   if(useCustomEl) useCustomEl.addEventListener('change', ()=>{ customFieldsEl.hidden = !useCustomEl.checked; });
@@ -4769,7 +4852,14 @@ function openEventDialog(tid, existing){
             winBy: parseInt(document.getElementById('fEWinBy').value,10)||2,
             capPoints: parseInt(document.getElementById('fECapPoints').value,10)||30,
             deuceEnabled: document.getElementById('fEDeuce').checked
-          } : null)
+          } : null),
+      knockoutScoring: (format==='group_knockout' && document.getElementById('fEUseKO').checked) ? {
+            bestOf: parseInt(document.getElementById('fEKOBestOf').value,10),
+            pointsToWin: parseInt(document.getElementById('fEKOPointsToWin').value,10)||21,
+            winBy: parseInt(document.getElementById('fEKOWinBy').value,10)||2,
+            capPoints: parseInt(document.getElementById('fEKOCapPoints').value,10)||30,
+            deuceEnabled: document.getElementById('fEKODeuce').checked
+          } : null
     };
     if(existing){ await updateEvent(existing.id, data); } else { const id = await createEvent(tid, data); state.eventId = id; }
     closeGenericDialog(); render();
@@ -4934,7 +5024,7 @@ function openDecideDialog(match){
 let dlgScoreDraft = null;
 function openScoreDialog(match){
   const t = tournamentById(match.tournamentId), ev = eventById(match.eventId);
-  const cfg = scoringFor(ev, t);
+  const cfg = scoringFor(ev, t, match);
   const wasDecided = ['completed','walkover','retired'].includes(match.status);
   dlgScoreDraft = {matchId:match.id, cfg, games:(match.games&&match.games.length?match.games:[{a:0,b:0}]).map(g=>({a:g.a,b:g.b}))};
   openDialog(wasDecided?'Correct score':'Enter score', '', stdFoot('btnSaveCorrect', wasDecided?'Save correction':'Save score'));
@@ -5485,7 +5575,9 @@ const COLLECTIONS = ['tournaments','clubs','players','events','registrations','e
         state[col] = arr;
         ShareSync.schedule();   // keep live links up to date (no-op when nothing is shared)
         // Startup: render once when every collection has arrived, not once per collection.
-        if(pending>0){ pending--; if(pending===0){ state.ready=true; render(); } return; }
+        if(pending>0){ pending--; if(pending===0){ state.ready=true; render();
+          setTimeout(async ()=>{ try{ const n = await repairFalseByes(); if(n){ toast('Fixed '+n+' knockout match'+(n===1?'':'es')+' that were wrongly shown as byes'); render(); } }catch(e){ console.error('bye repair', e); } }, 300);
+        } return; }
         render();
         if(col==='tournaments' || col==='settings') ShareUI.redraw();
       });
