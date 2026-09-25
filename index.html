@@ -542,6 +542,20 @@
   .sb-acts{ display:flex; align-items:center; gap:6px; margin-top:9px; padding-top:9px; border-top:1px dashed var(--border); flex-wrap:wrap; }
   .sb-acts .grow{ flex:1; }
   .sb-ic svg{ width:15px; height:15px; }
+  .mt-sec{ margin-bottom:8px; }
+  .mt-sec > h3{ display:flex; align-items:center; gap:8px; font-size:15px; font-family:inherit; text-transform:none; letter-spacing:0; font-weight:800; margin:16px 0 10px; }
+  .mt-sec > h3 .n{ font-size:12px; font-weight:700; color:var(--muted); background:var(--surface-2); border-radius:10px; padding:1px 8px; }
+  .mt-sec:first-of-type > h3{ margin-top:4px; }
+  .ev-prog{ height:6px; border-radius:4px; background:var(--surface-2); overflow:hidden; margin-top:10px; }
+  .ev-prog span{ display:block; height:100%; background:var(--grad); border-radius:4px; }
+  .ev-prog-l{ display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--muted); margin-top:6px; }
+  .ev-card .sub-txt{ text-transform:capitalize; }
+  .ev-entries > summary{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; white-space:nowrap; }
+  .ev-entries > summary .sub-txt{ font-size:12px; font-weight:600; color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
+  .ev-entries > summary::after{ content:"›"; font-size:20px; line-height:1; color:var(--muted); transform:rotate(90deg); transition:transform .15s; }
+  .ev-entries[open] > summary::after{ transform:rotate(-90deg); }
+  .ev-entries[open] > summary{ margin-bottom:6px; }
+  .no-print-gap{ height:6px; }
   .sb-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:0 12px; align-items:start; }
   @media (max-width:700px){ .sb-grid{ grid-template-columns:minmax(0,1fr); } }
   .sb.me-match{ border-color:var(--court); }
@@ -697,7 +711,8 @@
       width:auto; max-width:none; margin:0 -14px 14px; padding:0 14px; gap:2px; background:var(--bg); border-radius:0; border-bottom:1px solid var(--border);
       position:sticky; top:calc(max(10px, env(safe-area-inset-top)) + 49px); z-index:25; }
     .tabs::-webkit-scrollbar{ display:none; }
-    .tab{ flex:none; padding:11px 12px 10px; font-size:13.5px; font-weight:600; text-transform:none; letter-spacing:0; border-radius:0; background:none; box-shadow:none; border-bottom:2.5px solid transparent; margin-bottom:-1px; white-space:nowrap; }
+    .tabs{ justify-content:space-between; }
+    .tab{ flex:none; padding:11px 6px 10px; font-size:13px; font-weight:600; text-transform:none; letter-spacing:0; border-radius:0; background:none; box-shadow:none; border-bottom:2.5px solid transparent; margin-bottom:-1px; white-space:nowrap; }
     .tab.active{ background:none; box-shadow:none; color:var(--court); border-bottom-color:var(--court); font-weight:700; }
 
     .setup-tabs button{ padding:9px 4px; font-size:12.5px; }
@@ -1016,7 +1031,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260925.193733';
+const APP_BUILD = '20260925.195854';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3725,7 +3740,8 @@ function goto(view, extra){
   render();
 }
 function openTournament(tid, tab, eventId){
-  state.tid = tid; state.view='tdetail'; state.tab = tab || 'overview'; state.eventId=eventId||null;
+  state.tid = tid; state.view='tdetail'; state.tab = tab || 'overview'; state.eventId=null;
+  if(eventId){ state.tab='matches'; state.filters.matches = {eventId}; }
   render();
 }
 
@@ -3785,12 +3801,6 @@ function shellHtml(){
       </div>
       <div class="topbar-spacer"></div>
       <div class="topbar-group">
-        <button class="icon-toggle-btn mobile-only" id="btnMobileSearch" title="Search">${ICONS.search}</button>
-        ${renderSearchBox()}
-        <div style="position:relative">
-          <button class="icon-toggle-btn" id="btnBell" title="Notifications">${ICONS.bell}${unreadNotifCount()?`<span class="badge-dot">${unreadNotifCount()>9?'9+':unreadNotifCount()}</span>`:''}</button>
-          ${renderNotifPanel()}
-        </div>
         <div class="role-switch" hidden>
         </div>
         <div class="theme-toggle" id="themeToggle">
@@ -4017,7 +4027,7 @@ function renderTournamentsList(){
 
 /* ---------- TOURNAMENT DETAIL ---------- */
 function tabsForRole(){
-  if(state.role==='admin') return [['overview','Overview'],['events','Events'],['matches','Matches'],['schedule','Schedule'],['results','Results'],['settings','Settings']];
+  if(state.role==='admin') return [['overview','Overview'],['events','Events'],['matches','Matches'],['results','Results'],['settings','Settings']];
   if(state.role==='player') return [['overview','Overview'],['mymatches','My Matches'],['draws','Draws'],['results','Results'],['register','Register']];
   const pub = [['overview','Overview'],['live','Live'],['schedule','Schedule'],['draws','Draws'],['results','Results'],['players','Players']];
   if(!VIEWER) return pub;
@@ -4032,13 +4042,13 @@ function renderTournamentDetail(){
   const admin = state.role==='admin' && !VIEWER;
   // Draws, Players, Courts and General live under the Settings tab (their own keys stay valid).
   if(admin && state.tab==='settings') state.tab = state.setupTab || 'draws';
+  if(admin && state.tab==='schedule') state.tab = 'matches';
   const inSetup = admin && SETUP_TABS.some(x=>x[0]===state.tab);
   if(inSetup) state.setupTab = state.tab;
   if(!inSetup && !tabs.find(x=>x[0]===state.tab)) state.tab = VIEWER ? viewerDefaultTab(t) : tabs[0][0];
   const topTab = inSetup ? 'settings' : state.tab;
   const backView = 'tournaments';
   return `
-    ${VIEWER?'':`<button class="back-link mobile-only" data-nav="${backView}">${ICONS.back} Tournaments</button>`}
     <div class="t-header">
       <div><h2>${esc(t.name)}</h2><div class="t-sub">${esc(fmtDate(t.startDate))}${t.venue?' &middot; '+esc(t.venue):''} ${tournamentStatusPill(t, true)}${!VIEWER && isShareLive(t)?` <span class="pill court" title="Anyone with the link can follow this tournament">${ICONS.link} Live link on</span>`:''}${!VIEWER && t.share && t.share.expired && state.role==='admin'?` <span class="pill" title="Not changed for ${SHARE_KEEP_DAYS} days, so the link was removed">${ICONS.link} Link expired</span>`:''}</div></div>
       ${state.role==='admin' ? `<div class="t-actions" data-more-scope data-more-title="${esc(t.name)}">
@@ -4145,34 +4155,30 @@ function regStatusPill(s){
   return `<span class="pill ${map[s]||''}">${esc(s)}</span>`;
 }
 function renderEventsTab(t){
-  if(state.eventId){
-    const ev = eventById(state.eventId);
-    if(ev) return renderEventDetailAdmin(t, ev);
-    state.eventId=null;
-  }
   const evs = tEvents(t.id);
   return `
     <div class="row between wrap" style="margin-bottom:12px">
       <div class="helptext">${evs.length} event${evs.length===1?'':'s'}</div>
       <button class="btn btn-primary btn-sm" id="btnNewEvent">${ICONS.plus} Add event</button>
     </div>
-    ${evs.length ? `<div class="cat-grid">${evs.map(renderEventCard).join('')}</div>` : `<div class="empty-tab">No events yet. Add one (e.g. Men's Singles).</div>`}
+    ${evs.length ? `<div class="cat-grid">${evs.map(renderEventCard).join('')}</div>
+      <div class="helptext" style="margin-top:10px">Tap an event to see its matches. Players, entries and the draw are set up under Settings &rarr; Draws.</div>` : `<div class="empty-tab">No events yet. Add one (e.g. Men's Singles).</div>`}
   `;
 }
 function renderEventCard(ev){
   const entries = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam).length;
-  const regs = state.registrations.filter(r=>r.eventId===ev.id).length;
   const draw = eventDraw(ev.id);
-  return `<div class="cat-card" data-open-event="${ev.id}">
+  const ms = eventMatches(ev.id).filter(m=>m.entry1Id && m.entry2Id && !['bye','cancelled'].includes(m.status));
+  const done = ms.filter(m=>['completed','walkover','retired'].includes(m.status)).length;
+  const live = ms.filter(m=>m.status==='in_progress').length;
+  const pct = ms.length ? Math.round(100*done/ms.length) : 0;
+  return `<div class="cat-card ev-card" data-open-event="${ev.id}">
     <button class="icon-btn cat-del btn-danger" data-delete-event="${ev.id}" title="Delete event">${ICONS.trash}</button>
     <h3>${esc(ev.name)}</h3>
-    <div class="cat-meta">
-      <span class="pill">${esc(ev.type.replace(/_/g,' '))}</span>
-      <span class="pill">${esc(ev.drawFormat.replace(/_/g,' '))}</span>
-      <span class="pill">${regs} regs</span>
-      <span class="pill">${entries} entries</span>
-      ${draw?`<span class="pill gold">Draw ${esc(draw.status)}</span>`:''}
-    </div>
+    <div class="sub-txt">${esc(ev.drawFormat.replace(/_/g,' '))} &middot; ${entries} ${isDoublesType(ev.type)&&ev.drawFormat!=='americano'?'teams':'players'}</div>
+    ${draw ? `<div class="ev-prog"><span style="width:${pct}%"></span></div>
+      <div class="ev-prog-l"><span>${done} of ${ms.length} matches played</span>${live?`<span class="sb-live">&#9679; ${live} live</span>`:''}</div>`
+      : `<div class="ev-prog-l"><span class="pill">No draw yet</span></div>`}
   </div>`;
 }
 function renderAdminRegisterRow(t, ev, doubles){
@@ -4191,26 +4197,11 @@ function renderAdminRegisterRow(t, ev, doubles){
     <div class="helptext" style="margin-top:6px">Admin-registered players are confirmed immediately, skipping the pending queue.</div>
   </div>`;
 }
-function renderEventDetailAdmin(t, ev){
+function renderEventEntriesSection(t, ev){
   const regs = state.registrations.filter(r=>r.eventId===ev.id);
   const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam);
-  const draw = eventDraw(ev.id);
   const doubles = isDoublesType(ev.type);
-  // Two separate tabs: who is in the event, and the draw. Opens on Draw once one exists.
-  if(state.eventSubFor!==ev.id){ state.eventSub = draw ? 'draw' : 'players'; state.eventSubFor = ev.id; }
-  const sub = state.eventSub==='draw' ? 'draw' : 'players';
   return `
-    <button class="back-link" data-back-events="1">${ICONS.back} All events</button>
-    <div class="row between" style="margin-bottom:8px;flex-wrap:nowrap;align-items:flex-start">
-      <div style="min-width:0"><h3 style="text-transform:none;font-family:'Public Sans',sans-serif;font-size:18px;font-weight:700;letter-spacing:0;margin:0 0 2px">${esc(ev.name)}</h3>
-        <div class="sub-txt">${esc(ev.type.replace(/_/g,' '))} &middot; ${esc(ev.drawFormat.replace(/_/g,' '))} &middot; ${statusPillPlain(ev.status)}</div></div>
-      <button class="btn btn-sm" id="btnEditEvent" style="flex:none">${ICONS.edit} Edit</button>
-    </div>
-    <div class="ev-subtabs" role="tablist">
-      <button type="button" role="tab" class="${sub==='players'?'active':''}" data-ev-sub="players">Players<span class="n">${entries.length||regs.length}</span></button>
-      <button type="button" role="tab" class="${sub==='draw'?'active':''}" data-ev-sub="draw">Draw${draw?'':'<span class="n">&ndash;</span>'}</button>
-    </div>
-    ${sub==='players' ? `
     <div class="section-h"><h3>Registrations (${regs.length})</h3><button class="btn btn-sm" id="btnBuildEntries">${ICONS.refresh} Build entries from confirmed</button></div>
     ${renderAdminRegisterRow(t, ev, doubles)}
     ${regs.length ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Player</th><th>Partner</th><th>Status</th><th></th></tr></thead><tbody>
@@ -4225,7 +4216,13 @@ function renderEventDetailAdmin(t, ev){
     ${entries.length ? entries.map(en=>`<div class="list-row"><span class="seed-badge">${en.seed||'-'}</span><span class="grow main-txt">${esc(entryName(en))}</span>
       <input type="number" min="1" class="mono" style="width:56px;border:1px solid var(--border);border-radius:8px;padding:4px;background:var(--bg);color:var(--ink)" data-seed-input="${en.id}" value="${en.seed==null?'':en.seed}" placeholder="seed">
     </div>`).join('') : `<div class="empty-tab">Build entries from confirmed registrations first.</div>`}
-    ` : `
+  `;
+}
+function renderEventDrawCard(t, ev){
+  const regs = state.registrations.filter(r=>r.eventId===ev.id);
+  const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam);
+  const draw = eventDraw(ev.id);
+  return `
     <div class="card">
       <div class="field-row">
         <div class="field"><label>Format</label><select id="fDrawFormat" data-event-id="${ev.id}">
@@ -4243,18 +4240,13 @@ function renderEventDetailAdmin(t, ev){
       <div class="row wrap" style="margin-top:8px">
         <button class="btn btn-primary btn-sm" id="btnGenerateDraw">${ICONS.sparkles} ${draw?'Regenerate draw':'Generate draw'}</button>
         ${draw && draw.format==='group_knockout' ? `<button class="btn btn-sm" id="btnGenKnockout">Generate knockout from groups</button>`:''}
-        ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')!=='mexicano' ? `<button class="btn btn-sm" data-add-am-rounds="${ev.id}">${ICONS.plus} Add rounds</button>`:''}
         ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')==='mexicano' ? `<button class="btn btn-sm" id="btnGenNextMexicanoRound">${ICONS.sparkles} Generate next round</button>`:''}
         ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')==='mexicano' && ev.status!=='completed' && !americanoFinalMatch(ev.id) ? `<button class="btn btn-sm" id="btnFinishMexicano">${ICONS.check} Finish event</button>`:''}
-        ${draw && draw.format==='americano' && !americanoFinalMatch(ev.id) ? `<button class="btn btn-sm" data-am-final="${ev.id}">${ICONS.trophy||ICONS.sparkles} Create final (top 4)</button>`:''}
-        ${draw ? `<button class="btn btn-sm" id="btnGoDrawsFromEvent">View bracket &rarr;</button>` : ''}
       </div>
       ${draw?`<div class="helptext" style="margin-top:6px">Generated ${esc(fmtDateTime(draw.generatedAt))}. Regenerating a published draw is confirmed and audit-logged.</div>`:''}
-    </div>`}
+    </div>
   `;
 }
-
-/* ---------- DRAWS TAB / BRACKET RENDERING ---------- */
 function renderBracketColumns(matches, containerId, editable){
   if(!matches.length) return `<div class="empty-tab">No matches in this bracket yet.</div>`;
   const byRoundPos = {};
@@ -4365,6 +4357,7 @@ function renderAmericanoStandingsTable(rows){
     <td class="num mono">${r.pointsFor}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function renderDrawsTab(t){
+  if(state.role==='admin' && !VIEWER) return renderAdminDrawsTab(t);
   const evs = tEvents(t.id).filter(e=>eventDraw(e.id));
   if(!evs.length) return `<div class="empty-tab">No draws generated yet.${state.role==='admin'?' Generate one from the Events tab.':''}</div>`;
   let selId = state.filters.drawEventId;
@@ -4380,6 +4373,35 @@ function renderDrawsTab(t){
       ${moreMenuBtn('Draw actions')}
     </div>
     ${renderBracketForEvent(ev, state.role==='admin')}
+  `;
+}
+function renderAdminDrawsTab(t){
+  const evs = tEvents(t.id);
+  if(!evs.length) return `<div class="empty-tab">No events yet. <button class="btn btn-sm btn-primary" id="btnNewEvent" style="margin-left:6px">${ICONS.plus} Add event</button></div>`;
+  let selId = state.filters.drawEventId;
+  if(!evs.find(e=>e.id===selId)) selId = (evs.find(e=>eventDraw(e.id))||evs[0]).id;
+  state.filters.drawEventId = selId;
+  state.eventId = selId;          // the event buttons below (build entries, generate...) act on this event
+  const ev = eventById(selId), draw = eventDraw(ev.id);
+  const regs = state.registrations.filter(r=>r.eventId===ev.id).length;
+  const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam).length;
+  state.entriesOpen = state.entriesOpen||{};
+  const open = state.entriesOpen[ev.id]!==undefined ? state.entriesOpen[ev.id] : !draw;
+  return `
+    <div class="filter-bar" data-more-scope>
+      <select id="fDrawEventSelect">${evs.map(e=>`<option value="${e.id}" ${e.id===selId?'selected':''}>${esc(e.name)}${eventDraw(e.id)?'':' (no draw yet)'}</option>`).join('')}</select>
+      <button class="btn btn-sm no-print m-overflow" id="btnEditEvent">${ICONS.edit} Edit event</button>
+      ${draw?`<button class="btn btn-sm no-print m-overflow" id="btnExportDraw">${ICONS.download} Export CSV</button>
+      <button class="btn btn-sm no-print m-overflow" id="btnPrintDraw">${ICONS.print} Print</button>
+      <button class="btn btn-sm no-print m-overflow" id="btnSwapEntries">${ICONS.refresh} Swap entries&hellip;</button>`:''}
+      ${moreMenuBtn('Event actions')}
+    </div>
+    <details class="card m-details ev-entries" id="evEntriesBox" data-ev="${ev.id}" ${open?'open':''}>
+      <summary><span class="grow">Players &amp; entries</span><span class="sub-txt">${regs} registered &middot; ${entries} ${entries===1?'entry':'entries'}</span></summary>
+      ${renderEventEntriesSection(t, ev)}
+    </details>
+    ${renderEventDrawCard(t, ev)}
+    ${draw ? `<div class="no-print-gap"></div>${renderBracketForEvent(ev, true)}` : ''}
   `;
 }
 function drawBracketConnectorsFor(containerId){
@@ -4443,14 +4465,39 @@ function renderFilterBar(t, key, opts){
   </div>`;
 }
 function renderMatchesTab(t){
-  const matches = applyMatchFilters(tMatches(t.id), state.filters.matches);
-  matches.sort((a,b)=> (a.scheduledStart||'9999').localeCompare(b.scheduledStart||'9999'));
+  // One place for every match: on court now, the schedule (by start time), not yet scheduled, then results.
+  const f = state.filters.matches = state.filters.matches||{};
+  const all = applyMatchFilters(tMatches(t.id), f).filter(m=>(m.entry1Id||m.entry2Id) && m.status!=='bye' && (f.status==='cancelled' || m.status!=='cancelled'));
+  const DONE = ['completed','walkover','retired'];
+  const live = all.filter(m=>m.status==='in_progress');
+  const sched = all.filter(m=>m.scheduledStart && !DONE.includes(m.status) && m.status!=='in_progress')
+    .sort((a,b)=>a.scheduledStart.localeCompare(b.scheduledStart) || ((courtById(a.courtId)||{}).name||'').localeCompare((courtById(b.courtId)||{}).name||'', undefined, {numeric:true}));
+  const unsched = all.filter(m=>!m.scheduledStart && !DONE.includes(m.status) && m.status!=='in_progress')
+    .sort((a,b)=> (a.entry1Id&&a.entry2Id?0:1)-(b.entry1Id&&b.entry2Id?0:1) || a.round-b.round || a.position-b.position);
+  const tm = m=> m.actualEnd || m.updatedAt || m.scheduledStart || '';
+  const done = all.filter(m=>DONE.includes(m.status)).sort((a,b)=>tm(b).localeCompare(tm(a)));
+  const card = m=>renderScoreboard(m, {actions: state.role==='admin', hideTime: !!m.scheduledStart && !DONE.includes(m.status), hideEvent: !!f.eventId});
+  const grid = list=>`<div class="sb-grid">${list.map(card).join('')}</div>`;
+  const section = (title, n, body)=>`<div class="mt-sec"><h3>${title}<span class="n">${n}</span></h3>${body}</div>`;
+  const byTime = [];
+  sched.forEach(m=>{ const k = fmtDateTime(m.scheduledStart); const last = byTime[byTime.length-1]; if(last && last.k===k) last.ms.push(m); else byTime.push({k, ms:[m]}); });
+  const ev = f.eventId && eventById(f.eventId);
   return `
     <div data-more-scope>
     ${renderFilterBar(t,'matches',{more: moreMenuBtn()})}
-    <div class="export-row no-print"><button class="btn btn-sm m-overflow" id="btnExportSchedule">${ICONS.download} Export schedule CSV</button><button class="btn btn-sm m-overflow" id="btnExportResults">${ICONS.download} Export results CSV</button></div>
+    <div class="export-row no-print">
+      ${state.role==='admin'?`<button class="btn btn-sm btn-primary" id="btnAssignAny">${ICONS.calendar} Schedule a match&hellip;</button>`:''}
+      <button class="btn btn-sm m-overflow" id="btnExportCourtSchedule">${ICONS.download} Export schedule CSV</button>
+      <button class="btn btn-sm m-overflow" id="btnExportResults">${ICONS.download} Export results CSV</button>
+      <button class="btn btn-sm m-overflow" id="btnPrintSchedule">${ICONS.print} Print</button>
     </div>
-    ${matches.length ? `<div class="sb-grid">${matches.map(m=>renderMatchRowActionable(m)).join('')}</div>` : `<div class="empty-tab">No matches match these filters.</div>`}
+    </div>
+    ${ev && ev.drawFormat==='americano' && eventDraw(ev.id) ? `<div class="helptext" style="margin:-4px 0 10px">Standings and the final for ${esc(ev.name)} are under Results and Settings &rarr; Draws.</div>`:''}
+    ${!all.length ? `<div class="empty-tab">${ev && !eventDraw(ev.id) ? `No draw for ${esc(ev.name)} yet. Generate it under Settings &rarr; Draws.` : 'No matches match these filters.'}</div>` : ''}
+    ${live.length ? section('<span class="sb-live">&#9679;</span> On court now', live.length, grid(live)) : ''}
+    ${sched.length ? section('Schedule', sched.length, byTime.map(g=>`<div class="vm-time">${esc(g.k)}</div>${grid(g.ms)}`).join('')) : ''}
+    ${unsched.length ? section('Not scheduled yet', unsched.length, grid(unsched)) : ''}
+    ${done.length ? section('Completed', done.length, grid(done)) : ''}
   `;
 }
 function renderMatchRowActionable(m){ return renderScoreboard(m, {actions: state.role==='admin'}); }
@@ -5509,7 +5556,7 @@ function openEventDialog(tid, existing){
             deuceEnabled: document.getElementById('fEKODeuce').checked
           } : null
     };
-    if(existing){ await updateEvent(existing.id, data); } else { const id = await createEvent(tid, data); state.eventId = id; }
+    if(existing){ await updateEvent(existing.id, data); } else { const id = await createEvent(tid, data); state.filters.drawEventId = id; state.tab = 'draws'; }
     closeGenericDialog(); render();
   };
 }
@@ -5925,7 +5972,7 @@ document.addEventListener('click', async (e)=>{
     case 'btnDeleteTournament': if(t && await confirmDialog('Delete "'+t.name+'" and everything in it? This cannot be undone.')) await deleteTournamentCascade(t.id); return;
     case 'btnNewEvent': if(t) openEventDialog(t.id); return;
     case 'btnEditEvent': { const ev=eventById(state.eventId); if(ev) openEventDialog(t.id, ev); return; }
-    case 'btnBuildEntries': { const ev=eventById(state.eventId); if(ev){ await buildEntriesFromRegistrations(ev); if(!eventDraw(ev.id) && eventEntries(ev.id).some(e=>!e.isAmericanoTeam)){ state.eventSub='draw'; state.eventSubFor=ev.id; } render(); } return; }
+    case 'btnBuildEntries': { const ev=eventById(state.eventId); if(ev){ await buildEntriesFromRegistrations(ev); render(); } return; }
     case 'btnGenerateDraw': {
       const ev = eventById(state.eventId); if(!ev) return;
       const draw = eventDraw(ev.id);
@@ -5953,7 +6000,7 @@ document.addEventListener('click', async (e)=>{
       }
       render(); return;
     }
-    case 'btnGoDrawsFromEvent': { state.filters.drawEventId = state.eventId; state.tab='draws'; state.eventId=null; render(); return; }
+    case 'btnGoDrawsFromEvent': { state.filters.drawEventId = state.eventId; state.tab='draws'; render(); return; }
     case 'btnExportDraw': { const ev=eventById(state.filters.drawEventId); if(ev) exportDraw(ev.id); return; }
     case 'btnPrintDraw': case 'btnPrintSchedule': case 'btnPrintResults': printView(); return;
     case 'btnSwapEntries': { const ev=eventById(state.filters.drawEventId); if(ev) openSwapDialog(ev); return; }
@@ -6106,8 +6153,8 @@ document.addEventListener('click', async (e)=>{
     ['data-open-match', v=>{ const m=matchById(v); if(m) openMatchDetailDialog(m); }],
     ['data-select-tournament', v=>openTournament(v)],
     ['data-nav', v=>goto(v)],
-    ['data-tab', v=>{ state.tab=v; state.eventId=null; render(); }],
-    ['data-open-event', v=>{ state.eventId=v; render(); window.scrollTo(0,0); }],
+    ['data-tab', v=>{ state.tab=v; state.eventId=null; render(); window.scrollTo(0,0); }],
+    ['data-open-event', v=>{ state.eventId=null; state.tab='matches'; state.filters.matches = {eventId:v}; render(); window.scrollTo(0,0); }],
     ['data-back-events', ()=>{ state.eventId=null; render(); window.scrollTo(0,0); }],
     ['data-delete-event', async v=>{ if(await confirmDialog('Delete this event and all its data?')) await deleteEventCascade(v); }],
     ['data-open-live', v=>{ const m=matchById(v); if(m) openScoreDialog(m); }],
@@ -6213,6 +6260,8 @@ document.addEventListener('input', (e)=>{
 
 /* ============================== POST-RENDER HOOKS / THEME ============================== */
 function postRenderHooks(){
+  const entBox = document.getElementById('evEntriesBox');
+  if(entBox) entBox.addEventListener('toggle', ()=>{ state.entriesOpen = state.entriesOpen||{}; state.entriesOpen[entBox.getAttribute('data-ev')] = entBox.open; });
   const addForm = document.getElementById('tAddPlayerForm');
   if(addForm) addForm.addEventListener('toggle', ()=>{ state.tAddOpen = addForm.open; });
   // Keep the active tab visible in the sideways-scrolling tab strip (phones).
