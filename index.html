@@ -1081,7 +1081,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260926.133829';
+const APP_BUILD = '20260926.180809';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -2203,7 +2203,7 @@ async function addAmericanoRounds(event, count){
     });
     Object.values(draw.americanoSitOut||{}).forEach(list=>(list||[]).forEach(p=>{ if(idx[p]!==undefined) hist.sits[idx[p]]++; }));
     hist.lastSit = ((draw.americanoSitOut||{})[lastRound]||[]).map(p=>idx[p]).filter(x=>x!==undefined);
-    const genders = variant==='mixed' ? pids.map(p=>(playerById(p)||{}).gender) : null;
+    const genders = variant==='mixed' ? pids.map(p=>normGender((playerById(p)||{}).gender)) : null;
     const plan = americanoMoreRounds(n, count, hist, genders);
     const ctx = {tournamentId:event.tournamentId, eventId:event.id, drawId:draw.id};
     const newEntries = [], newMatches = [], sitOut = {...(draw.americanoSitOut||{})};
@@ -2238,7 +2238,7 @@ function openAddAmericanoRoundsDialog(ev){
   const variant = ev.americanoVariant||'classic';
   const pids = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam).map(e=>e.player1Id);
   const n = pids.length;
-  const men = variant==='mixed' ? pids.filter(p=>(playerById(p)||{}).gender==='male').length : 0;
+  const men = variant==='mixed' ? pids.filter(p=>normGender((playerById(p)||{}).gender)==='male').length : 0;
   const cyc = americanoCycleLength(variant==='mixed'?men:n, variant==='mixed');
   const step = americanoEqualRoundsStep(n, variant==='mixed'?men:0);
   const existing = eventMatches(ev.id).filter(m=>m.bracket==='AM');
@@ -2283,8 +2283,8 @@ function openAddAmericanoRoundsDialog(ev){
    verified round-robin schedule (reused as an index-pairing, not a partner
    list here) so head-to-heads vary too. */
 function buildMixedAmericano(ctx, entries){
-  const males = entries.filter(e=>{ const p=playerById(e.player1Id); return p && p.gender==='male'; });
-  const females = entries.filter(e=>{ const p=playerById(e.player1Id); return p && p.gender==='female'; });
+  const males = entries.filter(e=>{ const p=playerById(e.player1Id); return p && normGender(p.gender)==='male'; });
+  const females = entries.filter(e=>{ const p=playerById(e.player1Id); return p && normGender(p.gender)==='female'; });
   if(males.length<4 || females.length<4 || males.length!==females.length){
     throw new Error('Mixed Americano needs an equal number of men and women, at least 4 of each.');
   }
@@ -2416,7 +2416,7 @@ function americanoFinalDefaultTeams(ev){
   const individual = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam);
   const standing = computeAmericanoStandings(individual, americanoRoundMatches(ev.id));
   if((ev.americanoVariant||'classic')==='mixed'){
-    const g = s=>standing.filter(r=>(playerById(r.playerId)||{}).gender===s).map(r=>r.playerId);
+    const g = s=>standing.filter(r=>normGender((playerById(r.playerId)||{}).gender)===s).map(r=>r.playerId);
     const men = g('male'), women = g('female');
     if(men.length>=2 && women.length>=2) return [[men[0], women[1]], [men[1], women[0]]];
   }
@@ -3216,6 +3216,13 @@ async function deleteTournamentCascade(id){
 }
 
 async function createClub(name, city){ return act(async ()=> Store.add('clubs', {name, city:city||''})); }
+/* Gender as stored can be "male", "Male", "M", "" ... compare on one spelling. */
+function normGender(g){
+  const v = String(g||'').trim().toLowerCase();
+  if(['male','m','man','men'].includes(v)) return 'male';
+  if(['female','f','woman','women'].includes(v)) return 'female';
+  return 'unspecified';
+}
 async function createPlayer(data){
   return act(async ()=> Store.add('players', {
     name:data.name, photoUrl:data.photoUrl||'', dob:data.dob||'', gender:data.gender||'unspecified',
@@ -4624,8 +4631,8 @@ function renderBracketForEvent(ev, editable){
     const standing = computeAmericanoStandings(individualEntries, matches);
     const standingsHtml = (ev.americanoVariant==='mixed')
       ? `<div class="group-grid">
-          <div class="group-card card"><h4>Men</h4>${renderAmericanoStandingsTable(standing.filter(r=>{const p=playerById(r.playerId); return p&&p.gender==='male';}))}</div>
-          <div class="group-card card"><h4>Women</h4>${renderAmericanoStandingsTable(standing.filter(r=>{const p=playerById(r.playerId); return p&&p.gender==='female';}))}</div>
+          <div class="group-card card"><h4>Men</h4>${renderAmericanoStandingsTable(standing.filter(r=>{const p=playerById(r.playerId); return p&&normGender(p.gender)==='male';}))}</div>
+          <div class="group-card card"><h4>Women</h4>${renderAmericanoStandingsTable(standing.filter(r=>{const p=playerById(r.playerId); return p&&normGender(p.gender)==='female';}))}</div>
         </div>`
       : renderAmericanoStandingsTable(standing);
     const fin = americanoFinalMatch(ev.id);
@@ -5116,7 +5123,7 @@ function renderViewerStandings(t){
       const fin = americanoFinalMatch(ev.id);
       inner = (fin ? `<div class="vm-sub">Final</div>${renderViewerMatch(fin)}<div class="vm-sub">Table</div>` : '') +
         (ev.americanoVariant==='mixed'
-          ? `<div class="vm-sub">Men</div>${renderAmericanoStandingsTable(standing.filter(r=>(playerById(r.playerId)||{}).gender==='male'))}<div class="vm-sub">Women</div>${renderAmericanoStandingsTable(standing.filter(r=>(playerById(r.playerId)||{}).gender==='female'))}`
+          ? `<div class="vm-sub">Men</div>${renderAmericanoStandingsTable(standing.filter(r=>normGender((playerById(r.playerId)||{}).gender)==='male'))}<div class="vm-sub">Women</div>${renderAmericanoStandingsTable(standing.filter(r=>normGender((playerById(r.playerId)||{}).gender)==='female'))}`
           : renderAmericanoStandingsTable(standing));
     } else if(draw.format==='round_robin'){
       inner = renderStandingsTable(computeGroupStandings(eventEntries(ev.id).map(e=>e.id), matches, draw.tiebreak));
@@ -5247,7 +5254,8 @@ function renderPlayerCardsAdmin(players){
 function renderRankingsView(){
   const f = state.filters.rankings = state.filters.rankings||{};
   let stats = computePlayerStats(s=>s.matchesPlayed>0 || s.rankingPoints>0);
-  if(f.gender) stats = stats.filter(s=> (s.player||{}).gender===f.gender);
+  const allRanked = stats;
+  if(f.gender) stats = stats.filter(s=> normGender((s.player||{}).gender)===f.gender);
   if(f.clubId) stats = stats.filter(s=> (s.player||{}).clubId===f.clubId);
   stats.sort((a,b)=> b.rankingPoints-a.rankingPoints || b.winPct-a.winPct);
   return `
@@ -5255,9 +5263,11 @@ function renderRankingsView(){
       <div class="t-actions"><button class="btn btn-sm" data-points-help="1" title="How points work" aria-label="How points work">${ICONS.info} How points work</button>${VIEWER?'':`<button class="btn btn-sm" id="btnExportRankings" aria-label="Export rankings CSV" title="Export rankings CSV">${ICONS.download} Export</button>`}</div>
     </div>
     <div class="filter-bar">
-      <select data-filter="rankings.gender"><option value="">All genders</option><option value="male" ${f.gender==='male'?'selected':''}>Male</option><option value="female" ${f.gender==='female'?'selected':''}>Female</option></select>
+      <select data-filter="rankings.gender"><option value="">All genders</option><option value="male" ${f.gender==='male'?'selected':''}>Male</option><option value="female" ${f.gender==='female'?'selected':''}>Female</option>${allRanked.some(s=>normGender((s.player||{}).gender)==='unspecified')?`<option value="unspecified" ${f.gender==='unspecified'?'selected':''}>Not set</option>`:''}</select>
       <select data-filter="rankings.clubId"><option value="">All clubs</option>${state.clubs.map(c=>`<option value="${c.id}" ${f.clubId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
     </div>
+    ${(()=>{ const n = allRanked.filter(s=>normGender((s.player||{}).gender)==='unspecified').length;
+      return n && f.gender && f.gender!=='unspecified' ? `<div class="helptext" style="margin:-4px 0 10px">${n} ranked player${n===1?' has':'s have'} no gender set, so ${n===1?'is':'are'} left out here. Pick "Not set" to see ${n===1?'them':'them'}, and set it from Players.</div>` : ''; })()}
     <div class="table-scroll"><table class="standings"><thead><tr><th>#</th><th>Player</th><th class="num">Pts</th><th class="num">Titles</th><th class="num">W-L</th><th class="num">Win %</th>${VIEWER?'':'<th class="num">Tournaments</th>'}</tr></thead>
     <tbody>${stats.map((s,i)=>`<tr class="rank-${i+1} ${followedPlayer() && s.playerId===followedPlayer().id?'me-row':''}"><td class="rk mono">${i+1}</td><td>${esc((s.player||{}).name||'Unknown')}</td><td class="num mono">${s.rankingPoints}</td>
       <td class="num mono">${s.titles}</td><td class="num mono">${s.wins}-${s.losses}</td><td class="num mono">${s.winPct}%</td>${VIEWER?'':`<td class="num mono">${s.tournamentsCount}</td>`}</tr>`).join('') || `<tr><td colspan="7" class="empty-tab">No ranked players yet.</td></tr>`}
@@ -5904,7 +5914,7 @@ function openPlayerDialog(existing, tournamentId){
   const body = `
     <div class="field"><label>Name</label><input id="fPName" value="${esc(p.name||'')}" placeholder="Aiko Tanaka"></div>
     <div class="field-row">
-      <div class="field"><label>Gender</label><select id="fPGender">${['male','female','unspecified'].map(v=>`<option value="${v}" ${p.gender===v?'selected':''}>${v}</option>`).join('')}</select></div>
+      <div class="field"><label>Gender</label><select id="fPGender">${existing?'':'<option value="" selected disabled>Choose&hellip;</option>'}${[['male','Male'],['female','Female'],['unspecified','Other / not set']].map(([v,l])=>`<option value="${v}" ${normGender(p.gender)===v && existing?'selected':''}>${l}</option>`).join('')}</select></div>
       <div class="field"><label>Skill level</label><select id="fPSkill">${['beginner','intermediate','advanced'].map(v=>`<option value="${v}" ${p.skillLevel===v?'selected':''}>${v}</option>`).join('')}</select></div>
     </div>
     <div class="field"><label>Club</label><select id="fPClub"><option value="">No club</option>${state.clubs.map(c=>`<option value="${c.id}" ${p.clubId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
@@ -5928,6 +5938,7 @@ function openPlayerDialog(existing, tournamentId){
   document.getElementById('btnSavePlayerDlg').onclick = async ()=>{
     const name = document.getElementById('fPName').value.trim();
     if(!name){ toast('Name is required', true); return; }
+    if(!document.getElementById('fPGender').value){ toast('Choose a gender - rankings and mixed events use it', true); return; }
     const data = {
       name, gender:document.getElementById('fPGender').value, skillLevel:document.getElementById('fPSkill').value,
       clubId: document.getElementById('fPClub').value||null
@@ -6258,6 +6269,9 @@ function rerenderPreservingFocus(el){
   const key = el.getAttribute('data-filter') || el.id;
   const isText = el.tagName!=='SELECT' && !['checkbox','date','number','time'].includes(el.type);
   const selStart = el.selectionStart, selEnd = el.selectionEnd;
+  // Only typing fields get focus back. Focusing a <select> again after the redraw
+  // makes iPhone open its picker a second time, so let dropdowns go.
+  if(!isText || el.readOnly){ try{ el.blur(); }catch(e){} render(); return; }
   render();
   if(key){
     const again = document.querySelector(`[data-filter="${key}"]`) || (el.id?document.getElementById(el.id):null);
