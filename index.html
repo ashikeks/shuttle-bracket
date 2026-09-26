@@ -604,6 +604,8 @@
   .champs-nm{ font-weight:800; text-align:right; }
   .btn-finish svg{ color:var(--gold); }
   .finish-hint{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:var(--surface); border:1px dashed var(--border); border-radius:12px; padding:10px 12px; margin-bottom:14px; font-size:13px; font-weight:600; }
+  .btn-start{ background:color-mix(in srgb, var(--gold) 14%, var(--surface)); border-color:color-mix(in srgb, var(--gold) 45%, var(--border)); color:var(--ink); font-weight:800; }
+  .btn-start svg{ color:var(--gold); width:15px; height:15px; }
   .sb-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:0 12px; align-items:start; }
   @media (max-width:700px){ .sb-grid{ grid-template-columns:minmax(0,1fr); } }
   .sb.me-match{ border-color:var(--court); }
@@ -1079,7 +1081,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260925.213314';
+const APP_BUILD = '20260926.133829';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -1941,18 +1943,47 @@ function americanoSchedule(n){
     });
   }
   const s = mod, R = n, sitsPer = s;
+  // First choice: breaks rotate through the players in a fixed cycle (round r: the next
+  // s players in a shuffled order sit), so everyone's breaks are evenly spaced - never
+  // two in a row and no long runs of games. Partners are then matched round by round.
+  const rotDeadline = Date.now() + 2000;
+  while(Date.now() < rotDeadline){
+    const perm = americanoShuffle([...Array(n).keys()]);
+    const used = Array.from({length:n},()=>new Uint8Array(n));
+    const plan = [];
+    for(let r=0;r<R;r++){
+      const sit = []; for(let j=0;j<s;j++) sit.push(perm[(r*s+j)%n]);
+      const sitSet = new Set(sit);
+      let m = null;
+      for(let tries=0; tries<40 && !m; tries++) m = americanoPerfectMatching([...Array(n).keys()].filter(p=>!sitSet.has(p)), used);
+      if(!m) break;
+      m.forEach(([a,b])=>{ used[a][b]=used[b][a]=1; });
+      plan.push({sit, pairs:m});
+    }
+    if(plan.length===R) return plan.map(f=>({games: americanoPairTeams(f.pairs, oppCount), sit: f.sit}));
+  }
   const deadline = Date.now() + 4000;
   while(Date.now() < deadline){
     const used = Array.from({length:n},()=>new Uint8Array(n));
     const sitsLeft = new Array(n).fill(sitsPer);
     const plan = [];
     let ok = true;
+    let prevSit = new Set();
     for(let r=0;r<R && ok;r++){
       const roundsLeft = R - r;
       let found = null;
       for(let tries=0; tries<30 && !found; tries++){
+        // never sit out two rounds in a row: last round's sitters only sit again if they must
         const forced=[], cand=[];
-        for(let p=0;p<n;p++){ if(sitsLeft[p]===roundsLeft) forced.push(p); else if(sitsLeft[p]>0) cand.push(p); }
+        const strict = Date.now() < deadline - 1500;   // last resort: allow it rather than fail
+        for(let p=0;p<n;p++){
+          if(!sitsLeft[p]) continue;
+          if(!strict){ if(sitsLeft[p]===roundsLeft) forced.push(p); else cand.push(p); continue; }
+          // a player with k breaks left needs at least 2k-1 rounds to fit them without two in a row
+          const need = prevSit.has(p) ? 2*sitsLeft[p] : 2*sitsLeft[p]-1;
+          if(prevSit.has(p)) continue;
+          if(need>=roundsLeft) forced.push(p); else cand.push(p);
+        }
         if(forced.length > s) break;
         const sit = forced.slice(), pool = cand.slice();
         while(sit.length < s && pool.length){
@@ -1969,6 +2000,7 @@ function americanoSchedule(n){
       }
       if(!found){ ok=false; break; }
       found.sit.forEach(p=>sitsLeft[p]--);
+      prevSit = new Set(found.sit);
       found.pairs.forEach(([a,b])=>{ used[a][b]=used[b][a]=1; });
       plan.push(found);
     }
@@ -1976,21 +2008,72 @@ function americanoSchedule(n){
   }
   return null;
 }
+/* ============ FAIR ROUND ORDER ============
+   The set of rounds fixes who partners whom and how many games each player
+   gets; the ORDER of rounds decides how breaks fall. Order them so nobody sits
+   out two rounds in a row (also across the previous round, prevSit) and breaks
+   are spread evenly, which keeps runs of back-to-back games as short as the
+   player count allows. rounds: [{sit:Set}], players: ids. Returns an index order. */
+function americanoFairOrder(rounds, players, prevSit){
+  const R = rounds.length;
+  const idx = [...Array(R).keys()];
+  if(R<2 || !rounds.some(r=>r.sit.size)) return idx;
+  prevSit = prevSit || new Set();
+  const cost = order=>{
+    let c = 0;
+    for(const p of players){
+      let streak = 0, lastSat = prevSit.has(p);
+      for(let i=0;i<R;i++){
+        if(rounds[order[i]].sit.has(p)){ if(lastSat) c += 10000; c += streak*streak; streak = 0; lastSat = true; }
+        else { streak++; lastSat = false; }
+      }
+      c += streak*streak;
+    }
+    return c;
+  };
+  let best = idx.slice(), bestC = cost(best);
+  const deadline = Date.now() + 250;
+  for(let restart=0; restart<60 && Date.now()<deadline; restart++){
+    let cur = restart ? americanoShuffle(idx.slice()) : idx.slice(), cc = cost(cur), improved = true;
+    while(improved && Date.now()<deadline){
+      improved = false;
+      for(let i=0;i<R;i++) for(let j=i+1;j<R;j++){
+        [cur[i],cur[j]] = [cur[j],cur[i]];
+        const c2 = cost(cur);
+        if(c2 < cc){ cc = c2; improved = true; } else { [cur[i],cur[j]] = [cur[j],cur[i]]; }
+      }
+    }
+    if(cc < bestC){ bestC = cc; best = cur.slice(); }
+  }
+  return best;
+}
+/* With fewer courts than matches, a round's matches are played one after the
+   other: start each round with the match that shares the fewest players with
+   the previous round's last match, so nobody goes straight from one to the next. */
+function americanoOrderGamesInRound(games, prevLastPlayers, playersOf){
+  if(!prevLastPlayers || games.length<2) return games;
+  const overlap = g=> playersOf(g).filter(p=>prevLastPlayers.has(p)).length;
+  return games.slice().sort((a,b)=>overlap(a)-overlap(b));
+}
 /* Human summary of what the schedule guarantees for n players. */
 function americanoPlanSummary(n){
   if(n<4) return 'Americano needs at least 4 players.';
   const mod = n%4;
   if(mod<=1) return `${n} players: everyone partners every other player exactly once and plays ${n-1} games` + (mod===1?' (one player sits out each round).':'.');
   const g = n - mod;
-  return `${n} players: partnering everyone exactly once is mathematically impossible (needs a player count where n % 4 is 0 or 1, e.g. ${n-mod} or ${n+4-mod}). Everyone still plays exactly ${g} games with ${g} different partners - no repeats - and sits out ${mod} rounds.`;
+  return `${n} players: partnering everyone exactly once is mathematically impossible (needs a player count where n % 4 is 0 or 1, e.g. ${n-mod} or ${n+4-mod}). Everyone still plays exactly ${g} games with ${g} different partners - no repeats - and sits out ${mod} rounds, never two in a row.`;
 }
 /* Classic Americano draw: individual entries in, ad-hoc two-player "team"
    entries (tagged isAmericanoTeam) minted per round out, since matches
    reference entries. Sitting players are recorded on the draw (sitOut) rather
    than as fake matches. Ranking is by individual points (computeAmericanoStandings). */
 function buildAmericano(ctx, entries){
-  const plan = americanoSchedule(entries.length);
+  let plan = americanoSchedule(entries.length);
   if(!plan) throw new Error('Could not build an Americano schedule for ' + entries.length + ' players.');
+  const order = americanoFairOrder(plan.map(rd=>({sit:new Set(rd.sit)})), [...Array(entries.length).keys()]);
+  plan = order.map(i=>plan[i]);
+  let prevLast = null;
+  plan = plan.map(rd=>{ const games = americanoOrderGamesInRound(rd.games, prevLast, g=>g.flat()); prevLast = new Set(games[games.length-1].flat()); return {...rd, games}; });
   const teamEntries = [], matches = [], sitOut = {};
   plan.forEach((rd, ri)=>{
     const roundNum = ri+1;
@@ -2039,11 +2122,13 @@ function americanoMoreRounds(n, count, hist, genders){
   const pc = hist.partner.map(r=>r.slice()), opp = hist.opp.map(o=>({...o}));
   const rounds = [];
   const idxs = [...Array(n).keys()];
-  const pickSitters = (pool, k)=> americanoShuffle(pool.slice()).sort((a,b)=> (games[b]-games[a]) || (sits[a]-sits[b])).slice(0,k);
+  let lastSit = new Set(hist.lastSit||[]);
+  const pickSitters = (pool, k)=> americanoShuffle(pool.slice()).sort((a,b)=> (games[b]-games[a]) || ((lastSit.has(a)?1:0)-(lastSit.has(b)?1:0)) || (sits[a]-sits[b])).slice(0,k);
   const commit = (pairs, sit, gamesPaired)=>{
     pairs.forEach(([a,b])=>{ pc[a][b]++; pc[b][a]++; });
     pairs.flat().forEach(p=>games[p]++); sit.forEach(p=>sits[p]++);
     rounds.push({games: gamesPaired || americanoPairTeams(pairs, opp), sit});
+    lastSit = new Set(sit);
   };
   let left = count;
   // Whole fresh cycles for Classic when everyone is level.
@@ -2051,8 +2136,9 @@ function americanoMoreRounds(n, count, hist, genders){
     const cyc = americanoCycleLength(n, false);
     while(left >= cyc && games.every(g=>g===games[0])){
       const perm = americanoShuffle(idxs.slice());
-      const plan = americanoSchedule(n);
+      let plan = americanoSchedule(n);
       if(!plan) break;
+      plan = americanoFairOrder(plan.map(rd=>({sit:new Set(rd.sit.map(i=>perm[i]))})), idxs, lastSit).map(i=>plan[i]);
       plan.forEach(rd=>{
         const mapped = rd.games.map(([t1,t2])=>[t1.map(i=>perm[i]), t2.map(i=>perm[i])]);
         mapped.forEach(([t1,t2])=> t1.forEach(a=>t2.forEach(b=>{ opp[a][b]=(opp[a][b]||0)+1; opp[b][a]=(opp[b][a]||0)+1; })));
@@ -2116,14 +2202,19 @@ async function addAmericanoRounds(event, count){
       a.forEach(x=>b.forEach(y=>{ hist.opp[x][y]=(hist.opp[x][y]||0)+1; hist.opp[y][x]=(hist.opp[y][x]||0)+1; }));
     });
     Object.values(draw.americanoSitOut||{}).forEach(list=>(list||[]).forEach(p=>{ if(idx[p]!==undefined) hist.sits[idx[p]]++; }));
+    hist.lastSit = ((draw.americanoSitOut||{})[lastRound]||[]).map(p=>idx[p]).filter(x=>x!==undefined);
     const genders = variant==='mixed' ? pids.map(p=>(playerById(p)||{}).gender) : null;
     const plan = americanoMoreRounds(n, count, hist, genders);
     const ctx = {tournamentId:event.tournamentId, eventId:event.id, drawId:draw.id};
     const newEntries = [], newMatches = [], sitOut = {...(draw.americanoSitOut||{})};
+    const lastMs = matches.filter(m=>m.round===lastRound).sort((a,b)=>b.position-a.position);
+    let prevLast = lastMs.length ? new Set([lastMs[0].entry1Id,lastMs[0].entry2Id].map(entryById).filter(Boolean).flatMap(entryPlayerIds).map(p=>idx[p])) : null;
     plan.forEach((rd, ri)=>{
       const roundNum = lastRound + ri + 1;
       if(rd.sit.length) sitOut[roundNum] = rd.sit.map(i=>pids[i]);
-      rd.games.forEach(([t1,t2], gi)=>{
+      const games = americanoOrderGamesInRound(rd.games, prevLast, g=>g.flat());
+      prevLast = new Set(games[games.length-1].flat());
+      games.forEach(([t1,t2], gi)=>{
         const mk = ([a,b])=>{
           const team = {id:uid(), eventId:event.id, player1Id:pids[a], player2Id:pids[b],
             seed:null, clubId:null, registrationId:null, isAmericanoTeam:true, americanoRound:roundNum};
@@ -2199,24 +2290,34 @@ function buildMixedAmericano(ctx, entries){
   }
   const n = males.length;
   const oppSchedule = DrawGenerator.roundRobinSchedule(n);
-  const teamEntries = [], matches = [];
+  // round r: man i partners woman (i+r) mod n; teams meet as in a round robin
+  let rounds = [];
   for(let r=0;r<n;r++){
-    const teams = males.map((m,i)=>{
-      const f = females[(i+r)%n];
-      const team = {id:uid(), eventId:ctx.eventId, player1Id:m.player1Id, player2Id:f.player1Id,
-        seed:null, clubId:null, registrationId:null, isAmericanoTeam:true, americanoRound:r+1};
-      teamEntries.push(team);
-      return team;
-    });
     const pairs = oppSchedule[r % Math.max(oppSchedule.length,1)] || [];
-    pairs.forEach(([a,b], pi)=>{
-      const m = baseMatch({...ctx, bracket:'AM', round:r+1, position:pi, e1:teams[a], e2:teams[b]});
-      m.id = uid();
-      matches.push(m);
-    });
+    const teamPlayers = males.map((m,i)=>[m.player1Id, females[(i+r)%n].player1Id]);
+    const inPlay = new Set(pairs.flat());
+    const sit = new Set(); teamPlayers.forEach((tp,ti)=>{ if(!inPlay.has(ti)) tp.forEach(x=>sit.add(x)); });
+    rounds.push({teamPlayers, pairs, sit});
   }
+  const all = entries.map(e=>e.player1Id);
+  rounds = americanoFairOrder(rounds, all).map(i=>rounds[i]);
+  const teamEntries = [], matches = [], sitOut = {};
+  let prevLast = null;
+  rounds.forEach((rd, ri)=>{
+    const roundNum = ri+1;
+    if(rd.sit.size) sitOut[roundNum] = [...rd.sit];
+    const pairs = americanoOrderGamesInRound(rd.pairs, prevLast, ([a,b])=>[...rd.teamPlayers[a], ...rd.teamPlayers[b]]);
+    if(pairs.length){ const [a,b] = pairs[pairs.length-1]; prevLast = new Set([...rd.teamPlayers[a], ...rd.teamPlayers[b]]); }
+    const teams = {};
+    const team = ti=> teams[ti] || (teams[ti] = (()=>{ const t = {id:uid(), eventId:ctx.eventId, player1Id:rd.teamPlayers[ti][0], player2Id:rd.teamPlayers[ti][1],
+      seed:null, clubId:null, registrationId:null, isAmericanoTeam:true, americanoRound:roundNum}; teamEntries.push(t); return t; })());
+    pairs.forEach(([a,b], pi)=>{
+      const m = baseMatch({...ctx, bracket:'AM', round:roundNum, position:pi, e1:team(a), e2:team(b)});
+      m.id = uid(); matches.push(m);
+    });
+  });
   markSchedulable(matches);
-  return {matches, teamEntries};
+  return {matches, teamEntries, sitOut};
 }
 /* Mexicano pairing: given individual entries already ordered strongest-first
    (random for round 1, by live standings afterwards), splits them into
@@ -2232,8 +2333,20 @@ function mexicanoFoursomePairs(orderedIndividualEntries){
   const teamPairs = groups.map(g=>[[g[0],g[2]],[g[1],g[3]]]);
   return {teamPairs, sitOut};
 }
-function buildMexicanoRound(ctx, orderedIndividualEntries, roundNum){
-  const {teamPairs, sitOut} = mexicanoFoursomePairs(orderedIndividualEntries);
+/* Who sits out a Mexicano round (player count not a multiple of 4): whoever has
+   played the most, but never someone who sat out the round before, then fewest
+   breaks so far. Keeps game counts equal and breaks spread out. */
+function mexicanoSitters(orderedIndividualEntries, k, games, sits, lastSit, runOf){
+  if(k<=0) return [];
+  const pool = americanoShuffle(orderedIndividualEntries.slice());
+  const run = e=> (runOf && runOf[e.player1Id]) || 0;
+  pool.sort((a,b)=> ((lastSit.has(a.player1Id)?1:0)-(lastSit.has(b.player1Id)?1:0)) || ((games[b.player1Id]||0)-(games[a.player1Id]||0)) || (run(b)-run(a)) || ((sits[a.player1Id]||0)-(sits[b.player1Id]||0)));
+  return pool.slice(0,k);
+}
+function buildMexicanoRound(ctx, orderedIndividualEntries, roundNum, sitters){
+  let ordered = orderedIndividualEntries;
+  if(sitters){ const out = new Set(sitters.map(e=>e.id)); ordered = orderedIndividualEntries.filter(e=>!out.has(e.id)).concat(sitters); }
+  const {teamPairs, sitOut} = mexicanoFoursomePairs(ordered);
   const teamEntries=[], matches=[];
   teamPairs.forEach(([tA,tB], pi)=>{
     const teamA = {id:uid(), eventId:ctx.eventId, player1Id:tA[0].player1Id, player2Id:tA[1].player1Id,
@@ -2270,7 +2383,17 @@ async function generateNextMexicanoRound(event){
     const byPlayerId = {}; individualEntries.forEach(e=>{ byPlayerId[e.player1Id]=e; });
     const orderedEntries = standing.map(r=>byPlayerId[r.playerId]).filter(Boolean);
     const nextRound = lastRound+1;
-    const built = buildMexicanoRound({tournamentId:event.tournamentId, eventId:event.id, drawId:draw.id}, orderedEntries, nextRound);
+    const games = {}, sits = {};
+    matches.forEach(m=>[m.entry1Id,m.entry2Id].forEach(eid=>{ const e=entryById(eid); if(e) entryPlayerIds(e).forEach(p=>{ games[p]=(games[p]||0)+1; }); }));
+    const sitMap = (draw.americanoSitOut && !Array.isArray(draw.americanoSitOut)) ? draw.americanoSitOut : {};
+    Object.values(sitMap).forEach(list=>(list||[]).forEach(p=>{ sits[p]=(sits[p]||0)+1; }));
+    const lastSit = new Set(sitMap[lastRound]||[]);
+    // how many rounds in a row each player has been on court: the longest runs rest first
+    const runOf = {};
+    orderedEntries.forEach(e=>{ let r=0; for(let k=lastRound; k>=1 && !(sitMap[k]||[]).includes(e.player1Id); k--) r++; runOf[e.player1Id]=r; });
+    const sitters = mexicanoSitters(orderedEntries, orderedEntries.length % 4, games, sits, lastSit, runOf);
+    const built = buildMexicanoRound({tournamentId:event.tournamentId, eventId:event.id, drawId:draw.id}, orderedEntries, nextRound, sitters);
+    if(built.sitOut.length) await Store.update('draws', draw.id, {americanoSitOut: {...sitMap, [nextRound]: built.sitOut.map(e=>e.player1Id)}});
     for(const te of built.teamEntries) await Store.add('entries', te, te.id);
     for(const m of built.matches) await Store.add('matches', m, m.id);
     toast('Round ' + nextRound + ' generated' + (built.sitOut.length ? (' - ' + built.sitOut.map(e=>playerName(e.player1Id)).join(', ') + ' sit out (not a multiple of 4)') : ''));
@@ -2907,6 +3030,27 @@ function computeEventPlacementsRaw(eventId){
   return placements;
 }
 
+/* Mark a match as being played now: it shows as LIVE (0-0) in the app and on the
+   live link straight away. Takes a free court if it has none, and warns when a
+   player is still on court in another match. */
+async function startMatch(m){
+  const busy = state.matches.filter(x=>x.id!==m.id && x.status==='in_progress' && x.tournamentId===m.tournamentId);
+  const mine = new Set(matchEntryPlayerIds(m));
+  const clash = busy.find(x=>matchEntryPlayerIds(x).some(p=>mine.has(p)));
+  if(clash){
+    const who = matchEntryPlayerIds(clash).filter(p=>mine.has(p)).map(playerName).join(', ');
+    if(!await confirmDialog(who + ' is still playing' + (courtById(clash.courtId)?' on '+courtById(clash.courtId).name:'') + '. Start this match anyway?', {title:'Player still on court', okLabel:'Start anyway', danger:false})) return;
+  }
+  const patch = {status:'in_progress', actualStart:nowIso(), games:m.games||[], updatedAt:nowIso()};
+  const courtBusy = m.courtId && busy.some(x=>x.courtId===m.courtId);
+  if(!m.courtId || courtBusy){
+    const free = tCourts(m.tournamentId).filter(c=>c.active && !busy.some(x=>x.courtId===c.id));
+    if(free.length) patch.courtId = free[0].id;
+  }
+  await act(async ()=>{ await Store.update('matches', m.id, patch); });
+  const c = courtById(patch.courtId || m.courtId);
+  toast('Match started' + (c ? ' on ' + c.name : '') + ' - shown as live');
+}
 /* ============ FINISHING EVENTS AND TOURNAMENTS ============
    Finishing locks the results: any match not yet played is cancelled (and can be
    restored by reopening), and the final standings decide the champion - also when
@@ -3228,7 +3372,7 @@ async function generateDraw(event, opts){
       else if(variant==='mexicano') built = buildMexicanoRound(ctx, ordered.slice().sort(()=>Math.random()-0.5), 1);
       else built = buildAmericano(ctx, ordered);
       matches = built.matches;
-      americanoSitOut = built.sitOut || null;
+      americanoSitOut = variant==='mexicano' ? (built.sitOut.length ? {1: built.sitOut.map(e=>e.player1Id)} : null) : (built.sitOut || null);
       for(const te of built.teamEntries) await Store.add('entries', te, te.id);
     } else if(format==='group_knockout'){
       const built = buildGroupsStage(ctx, ordered, opts.groupSize||4);
@@ -4178,7 +4322,7 @@ function tabsForRole(){
   if(!VIEWER) return pub;
   // The live link keeps to what spectators want: what's on court, what's next, results, and the table.
   const n = viewerMatchLists(currentTournament());
-  return [['live','Live'+(n.live.length?' '+n.live.length:'')],['upcoming','Upcoming'],['completed','Completed'],['standings','Standings']];
+  return [['live','Live'+(n.live.length?' '+n.live.length:'')],['completed','Completed'],['standings','Standings']];
 }
 function renderTournamentDetail(){
   const t = currentTournament();
@@ -4381,6 +4525,12 @@ function renderEventDrawCard(t, ev){
       </div>
       ${ev.drawFormat==='group_knockout'?`<div class="helptext" style="margin-bottom:8px">Scoring &middot; groups: <b>${esc(describeScoring(scoringFor(ev, t, {bracket:'GRP'})))}</b> &middot; knockout: <b>${esc(describeScoring(scoringFor(ev, t, {bracket:'SE'})))}</b> - change it from Edit event.</div>`:''}
       ${ev.drawFormat==='americano'?`<div class="helptext" style="margin-bottom:8px">Americano variant: <b>${esc((ev.americanoVariant||'classic').replace(/^./,c=>c.toUpperCase()))}</b> &middot; ${esc(describeScoring(scoringFor(ev, t)))} - change it from Edit event.</div>`:''}
+      ${ev.drawFormat==='americano' && (ev.americanoVariant||'classic')==='mexicano' ? (()=>{
+        const n = entries.length || regs.filter(r=>r.status==='confirmed').length;
+        if(!n || n%4===0) return n ? `<div class="helptext" style="margin-bottom:8px">${n} players: everyone plays every round.</div>` : '';
+        const step = americanoEqualRoundsStep(n);
+        return `<div class="helptext" style="margin-bottom:8px">${n} players: ${n%4} sit out each round - whoever has played most, never the same player two rounds in a row. Game counts are equal after every ${step} rounds (${step}, ${step*2}, ${step*3}&hellip;).</div>`;
+      })() : ''}
       ${ev.drawFormat==='americano' && (ev.americanoVariant||'classic')==='classic' ? (()=>{
         const nPlayers = entries.length || regs.filter(r=>r.status==='confirmed').length;
         return nPlayers ? `<div class="helptext" style="margin-bottom:8px">${esc(americanoPlanSummary(nPlayers))}</div>` : '';
@@ -4661,7 +4811,7 @@ function renderScoreboard(m, opts){
   const ev = eventById(m.eventId), court = courtById(m.courtId);
   const e1 = entryById(m.entry1Id), e2 = entryById(m.entry2Id);
   const live = m.status==='in_progress', done = ['completed','walkover','retired'].includes(m.status);
-  const games = m.games||[];
+  const games = (m.games && m.games.length) ? m.games : (live ? [{a:0,b:0}] : []);
   const fp = followedPlayer();
   const cell = (g,i,key)=>{
     const other = key==='a'?'b':'a', w = ScoreRules.gameWinner(g);
@@ -4682,8 +4832,11 @@ function renderScoreboard(m, opts){
     : opts.hideTime ? '' : (m.scheduledStart ? esc(fmtDateTime(m.scheduledStart)) : 'Not scheduled');
   const e1ok = e1 && e2;
   const canPlay = e1ok && !['completed','bye','cancelled'].includes(m.status);
+  const canStart = canPlay && !live && ['scheduled','called','pending','postponed'].includes(m.status);
   const acts = opts.actions ? `<div class="sb-acts no-print">
-      ${canPlay?`<button class="btn btn-sm btn-primary" data-open-live="${m.id}">${live?'Update score':'Score'}</button>`:''}
+      ${canStart?`<button class="btn btn-sm btn-start" data-start-match="${m.id}">${ICONS.bolt} Start</button>`:''}
+      ${canPlay?`<button class="btn btn-sm ${canStart?'':'btn-primary'}" data-open-live="${m.id}">${live?'Update score':'Score'}</button>`:''}
+      ${live && !(m.games||[]).some(g=>g.a||g.b) ? `<button class="btn btn-sm btn-ghost" data-unstart-match="${m.id}" title="Not started after all">Undo start</button>`:''}
       ${m.status==='completed'?`<button class="btn btn-sm" data-open-correct="${m.id}">${ICONS.edit} Edit score</button>`:''}
       <span class="grow"></span>
       <button class="btn btn-sm sb-ic" data-open-schedule="${m.id}" title="Schedule" aria-label="Schedule">${ICONS.calendar}</button>
@@ -4756,10 +4909,10 @@ function renderResultsTab(t){
   const recent = live.concat(latest);
   return `${followNote()}
     <div class="export-row no-print" data-more-scope><button class="btn btn-sm btn-ghost" data-points-help="1">${ICONS.info} How points work</button><button class="btn btn-sm m-overflow" id="btnExportResultsMain">${ICONS.download} Export all results CSV</button><button class="btn btn-sm m-overflow" id="btnPrintResults">${ICONS.print} Print</button>${moreMenuBtn('Export or print results')}</div>
-    ${recent.length ? `<div class="mt-sec"><h3>Latest scores</h3><div class="sb-grid">${recent.map(m=>renderScoreboard(m,{hideTime:true})).join('')}</div>
-      <button class="btn btn-sm btn-ghost res-more no-print" data-tab="matches">All results &rarr;</button></div>` : ''}
     <div class="mt-sec"><h3>Standings</h3></div>
     ${evs.map(ev=>renderEventResultsCard(ev)).join('') || `<div class="empty-tab">No events yet.</div>`}
+    ${recent.length ? `<div class="mt-sec"><h3>Latest scores</h3><div class="sb-grid">${recent.map(m=>renderScoreboard(m,{hideTime:true})).join('')}</div>
+      <button class="btn btn-sm btn-ghost res-more no-print" data-tab="matches">All results &rarr;</button></div>` : ''}
   `;
 }
 /* One table per event: position, wins-losses, rally points won and ranking points
@@ -4925,7 +5078,7 @@ function viewerMatchLists(t){
 }
 function viewerDefaultTab(t){
   const l = viewerMatchLists(t);
-  return l.live.length ? 'live' : l.upcoming.length ? 'upcoming' : 'completed';
+  return (l.live.length || l.upcoming.length) ? 'live' : 'completed';
 }
 function viewerEventFilter(t){
   const evs = tEvents(t.id).filter(e=>eventDraw(e.id));
@@ -4985,11 +5138,13 @@ function renderLiveInTournamentTab(t){
   const fp = followedPlayer();
   if(VIEWER){
     const l = viewerMatchLists(t);
-    const next = l.upcoming.slice(0,3);
+    const groups = []; let last = null;
+    l.upcoming.forEach(m=>{ const k = m.scheduledStart ? fmtDateTime(m.scheduledStart) : 'Not scheduled yet'; if(k!==last){ groups.push({k, ms:[]}); last=k; } groups[groups.length-1].ms.push(m); });
     return followNote() + viewerEventFilter(t) +
-      (l.live.length ? `<div class="vm-time">On court now</div>${l.live.map(m=>renderViewerMatch(m)).join('')}`
+      (l.live.length ? `<div class="mt-sec"><h3><span class="sb-live">&#9679;</span> On court now<span class="n">${l.live.length}</span></h3>${l.live.map(m=>renderViewerMatch(m)).join('')}</div>`
         : `<div class="empty-tab" style="margin-bottom:12px">${fp?esc(fp.name)+' isn\'t playing right now.':'No matches on court right now.'}</div>`) +
-      (next.length ? `<div class="vm-time">Up next</div>${next.map(m=>renderViewerMatch(m)).join('')}` : '');
+      (l.upcoming.length ? `<div class="mt-sec"><h3>Up next<span class="n">${l.upcoming.length}</span></h3>${groups.map(g=>`<div class="vm-time">${esc(g.k)}</div>${g.ms.map(m=>renderViewerMatch(m, true)).join('')}`).join('')}</div>`
+        : (l.live.length ? '' : `<div class="empty-tab">No more matches to play${fp?' for '+esc(fp.name):''}.</div>`));
   }
   const live = tMatches(t.id).filter(m=>m.status==='in_progress' && (!fp || matchHasPlayer(m, fp.id)));
   return followNote() + (live.length ? live.map(m=>renderPublicLiveCard(m)).join('') : `<div class="empty-tab">${fp?esc(fp.name)+' isn\'t playing right now.':'No matches live right now.'}</div>`);
@@ -6338,6 +6493,8 @@ document.addEventListener('click', async (e)=>{
     ['data-points-help', ()=>openPointsHelp()],
     ['data-filter-toggle', v=>{ state.mFilterOpen = state.mFilterOpen||{}; state.mFilterOpen[v] = !state.mFilterOpen[v]; render(); }],
     ['data-ev-sub', v=>{ state.eventSub = v; state.eventSubFor = state.eventId; render(); }],
+    ['data-start-match', async v=>{ const m=matchById(v); if(m){ await startMatch(m); render(); } }],
+    ['data-unstart-match', async v=>{ const m=matchById(v); if(m){ await act(async ()=>{ await Store.update('matches', m.id, {status:'scheduled', actualStart:null, games:[], updatedAt:nowIso()}); }, 'Back to not started'); render(); } }],
     ['data-finish-event', async v=>{ const ev=eventById(v); if(ev){ await confirmFinishEvent(ev); render(); } }],
     ['data-reopen-event', async v=>{ const ev=eventById(v); if(ev && await confirmDialog('Reopen '+ev.name+'? Matches cancelled when it was finished come back, and the champion is withdrawn until it is finished again.', {title:'Reopen event', okLabel:'Reopen', danger:false})){ await reopenEvent(ev); render(); } }],
     ['data-am-final', v=>{ const ev=eventById(v); if(ev) openAmericanoFinalDialog(ev); }],
