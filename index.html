@@ -609,6 +609,24 @@
   .sb-warn{ display:flex; gap:8px; align-items:flex-start; margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--danger-soft, rgba(220,50,50,.1)); color:var(--danger); font-size:12.5px; font-weight:600; }
   .sb-warn svg{ width:16px; height:16px; flex:none; margin-top:1px; }
   .g-remove{ float:right; border:none; background:none; color:var(--danger); font:inherit; font-size:12px; font-weight:700; cursor:pointer; padding:0; }
+  .guide-link{ width:100%; display:flex; align-items:center; gap:12px; text-align:left; padding:13px 14px; margin-bottom:14px; border-radius:14px; border:1px solid color-mix(in srgb, var(--court) 30%, var(--border)); background:linear-gradient(135deg, color-mix(in srgb, var(--court) 9%, var(--surface)), var(--surface)); color:var(--ink); font:inherit; cursor:pointer; }
+  .guide-link .grow{ flex:1; min-width:0; }
+  .guide-link b{ display:block; font-size:15px; }
+  .guide-link small{ display:block; color:var(--muted); font-size:12.5px; margin-top:2px; }
+  .guide-link > svg{ width:18px; height:18px; color:var(--faint); flex:none; }
+  .guide-intro{ display:flex; gap:10px; padding:12px 14px; border-radius:14px; background:color-mix(in srgb, var(--court) 9%, var(--surface)); border:1px solid color-mix(in srgb, var(--court) 22%, var(--border)); margin-bottom:12px; font-size:13.5px; line-height:1.5; }
+  .guide-intro > svg{ width:20px; height:20px; color:var(--court); flex:none; margin-top:2px; }
+  .guide-intro span{ color:var(--muted); font-size:12.5px; }
+  .guide-sec{ background:var(--surface); border:1px solid var(--border); border-radius:14px; margin-bottom:10px; overflow:hidden; }
+  .guide-sec > summary{ list-style:none; cursor:pointer; padding:14px; font-weight:800; font-size:15px; display:flex; align-items:center; justify-content:space-between; }
+  .guide-sec > summary::-webkit-details-marker{ display:none; }
+  .guide-sec > summary::after{ content:"›"; font-size:22px; line-height:1; color:var(--muted); transform:rotate(90deg); transition:transform .15s; }
+  .guide-sec[open] > summary::after{ transform:rotate(-90deg); }
+  .guide-sec ol{ margin:0; padding:0 16px 14px 34px; font-size:14px; line-height:1.55; color:var(--ink); }
+  .guide-sec li{ margin-bottom:8px; }
+  .guide-sec li::marker{ color:var(--court); font-weight:800; }
+  .guide-sec ul{ margin:6px 0 0; padding-left:18px; }
+  .guide-sec ul li{ margin-bottom:3px; }
   .sb-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:0 12px; align-items:start; }
   @media (max-width:700px){ .sb-grid{ grid-template-columns:minmax(0,1fr); } }
   .sb.me-match{ border-color:var(--court); }
@@ -1102,7 +1120,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260926.192934';
+const APP_BUILD = '20260926.204840';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -4008,7 +4026,7 @@ async function simulateDemoResults(tid, msId, wsId, mdId, xdId, courtIds){
 
 /* ============================== NAV / ROUTER ============================== */
 const NAV = {
-  admin:  [['dashboard','Dashboard'],['tournaments','Tournaments'],['players','Players'],['rankings','Rankings'],['reports','Reports'],['settings','Settings']],
+  admin:  [['dashboard','Dashboard'],['tournaments','Tournaments'],['players','Players'],['rankings','Rankings'],['reports','Reports'],['settings','Settings'],['guide','User guide']],
   player: [['home','Home'],['tournaments','Tournaments'],['mytournaments','My Tournaments'],['mymatches','My Matches'],['schedule','Schedule'],['results','Results'],['rankings','Rankings'],['profile','Profile']],
   public: [['tournaments','Tournaments'],['live','Live'],['schedule','Schedule'],['draws','Draws'],['results','Results'],['players','Players']]
 };
@@ -4034,7 +4052,7 @@ function renderTabBar(){
 function renderMoreView(){
   const inTabs = new Set(MOBILE_TABS[state.role].map(t=>t[0]));
   const extra = NAV[state.role].filter(([k])=>!inTabs.has(k));
-  const moreIcons = {reports:'print', settings:'edit', mytournaments:'trophy', rankings:'chart', profile:'user', draws:'list', players:'users', schedule:'calendar', mymatches:'court', results:'list'};
+  const moreIcons = {guide:'info', reports:'print', settings:'edit', mytournaments:'trophy', rankings:'chart', profile:'user', draws:'list', players:'users', schedule:'calendar', mymatches:'court', results:'list'};
   const players = state.players.slice().sort((a,b)=>a.name.localeCompare(b.name));
   let pref='auto'; try{ pref = localStorage.getItem('sb-theme') || 'auto'; }catch(e){}
   return `<div class="t-header page-h"><div><h2>More</h2></div></div>
@@ -4233,6 +4251,7 @@ function viewBody(){
     case 'rankings': return renderRankingsView();
     case 'reports': return renderReportsView();
     case 'settings': return renderSettingsView();
+    case 'guide': return renderGuideView();
     case 'home': return renderPlayerHome();
     case 'mytournaments': return renderMyTournaments();
     case 'mymatches': return renderMyMatches();
@@ -5368,8 +5387,70 @@ function renderDataSettingsCard(){
       <p class="helptext" style="margin:8px 0 0">Reset deletes every tournament, player, club, draw and result on this device. It can't be undone.</p>
     </div>`;
 }
+/* ---------- USER GUIDE (Settings -> User guide, and More) ---------- */
+const GUIDE = [
+  {id:'tournament', title:'1 · Create a tournament', steps:[
+    'Go to <b>Tournaments</b> (bottom bar) and tap <b>+ New tournament</b> at the top.',
+    'Fill in the name, start and end date and venue. Set <b>Courts</b> to how many courts you have.',
+    'Optional: set a <b>Registration deadline</b>. After it, only you (the organiser) can add players, and they are marked as late entries.',
+    'Tap <b>Create</b>. The tournament opens with its tabs: Overview, Events, Matches, Results and Settings.',
+    'Scoring, match length and rest times for the whole tournament are under the tournament’s <b>Settings → General</b>.'
+  ]},
+  {id:'players', title:'2 · Add players', steps:[
+    'Tap <b>Players</b> in the bottom bar, then <b>+ Add player</b>. Enter the name and choose <b>Male</b> or <b>Female</b> (rankings and Mixed events use it).',
+    'Or add them from inside a tournament: <b>Settings → Players</b> → <b>New player profile</b>, which can register the player into an event at the same time.',
+    'Players are shared by all your tournaments, so you only add each person once.'
+  ]},
+  {id:'events', title:'3 · Create events', steps:[
+    'Open the tournament → <b>Events</b> → <b>+ Add event</b>.',
+    'Give it a name (e.g. Men’s Singles) and pick the type: singles, doubles or mixed doubles.',
+    'Choose the format:<ul><li><b>Single / double elimination</b> – knockout bracket</li><li><b>Round robin</b> – everyone plays everyone</li><li><b>Groups + knockout</b> – group stage, then a bracket (can have its own knockout scoring)</li><li><b>Americano</b> – new partner every round, ranked by points won (Classic, Mixed or Mexicano)</li></ul>',
+    'Set the scoring if it differs from the tournament default, then tap <b>Save</b>. You land on Settings → Draws for the new event.'
+  ]},
+  {id:'entries', title:'4 · Register players into an event', steps:[
+    'Go to <b>Settings → Draws</b> and pick the event at the top.',
+    'Open <b>Players &amp; entries</b>. Under <b>Register a player</b>, choose a player (and a partner for doubles) and tap <b>Register</b>. Repeat for everyone.',
+    'Tap <b>Build entries from confirmed</b>. This turns the registrations into the entries used by the draw. Seeds can be typed next to each entry.'
+  ]},
+  {id:'draw', title:'5 · Generate the draw (creates the matches)', steps:[
+    'Still in <b>Settings → Draws</b>, check the format and tap <b>Generate draw</b>. All matches are created at once (for Mexicano, one round at a time).',
+    'Americano: everyone gets the same number of games and nobody sits out two rounds in a row. Use <b>Add rounds</b> to play more, and <b>Create final</b> to put the top four in a final.',
+    'Groups + knockout: when the group matches are done, tap <b>Generate knockout from groups</b>.',
+    'Made a mistake? <b>Regenerate draw</b> starts it again (you are asked first; scores in that event are lost).'
+  ]},
+  {id:'matches', title:'6 · Schedule and play matches', steps:[
+    'Open the <b>Matches</b> tab. Matches are grouped: <b>On court now</b>, <b>Schedule</b> (by start time), <b>Not scheduled yet</b> and <b>Completed</b>.',
+    'Use <b>Schedule a match…</b> or the calendar button on a match to give it a court and time. The app keeps the rest time between a player’s matches.',
+    'When players walk on court, tap <b>Start</b>. The match shows as LIVE here and on the live link.',
+    'Tap <b>Score</b> (or <b>Update score</b>) to enter the points of each game. A match with a winner is saved as completed; an unfinished score is kept as in progress.',
+    'Wrong result? Tap <b>Edit score</b> on a completed match. Use <b>W/O</b> for a walkover or retirement.',
+    'Tap an event on the <b>Events</b> tab to see only that event’s matches.'
+  ]},
+  {id:'results', title:'7 · Results, champions and rankings', steps:[
+    '<b>Results</b> shows each event’s standings (wins-losses, points won, rank points) and the latest scores.',
+    'When an event is done, tap <b>Finish event</b> in Settings → Draws. Unplayed matches are cancelled and the champion is published. <b>Reopen event</b> undoes it.',
+    'To close the whole tournament use <b>⋯ → Finish tournament</b> at the top; <b>Reopen tournament</b> is in the same menu.',
+    '<b>Rankings</b> (bottom bar) adds up ranking points from every event. Tap <b>How points work</b> there for the table.'
+  ]},
+  {id:'share', title:'8 · Share a live link', steps:[
+    'One-time setup: in the app <b>Settings → Live sharing</b>, enter your Supabase project URL, key and viewer page address, then <b>Test connection</b>.',
+    'In a tournament, tap the <b>Share</b> button at the top and <b>Create live link</b>. Send the link or QR code to players and spectators.',
+    'Viewers see Live and upcoming matches, Completed results and Standings, and can follow one player. It updates by itself.'
+  ]}
+];
+function renderGuideView(){
+  state.guideOpen = state.guideOpen || {tournament:true};
+  return `
+    <div class="guide-intro">${ICONS.info}<div><b>Quick start:</b> Tournament → Players → Event → Register &amp; build entries → Generate draw → Start and score matches → Finish.<br><span>Want to see it with data first? Load the demo in Settings → Data (only when the app is empty).</span></div></div>
+    ${GUIDE.map(sec=>`<details class="guide-sec" data-guide="${sec.id}" ${state.guideOpen[sec.id]?'open':''}>
+      <summary>${esc(sec.title)}</summary>
+      <ol>${sec.steps.map(x=>`<li>${x}</li>`).join('')}</ol>
+    </details>`).join('')}
+    <div class="helptext" style="text-align:center;margin:14px 0">Tip: on the tournament screen, secondary actions (edit, delete, finish, export, print) are in the ⋯ menu at the top.</div>`;
+}
 function renderSettingsView(){
   return `<div class="t-header page-h"><div><h2>Settings</h2><div class="t-sub">App settings</div></div></div>
+    <button class="guide-link" data-nav="guide"><span class="more-ic">${ICONS.info}</span><span class="grow"><b>User guide</b><small>How to set up a tournament, events and matches, step by step</small></span>${ICONS.chevRight}</button>
     ${renderShareSettingsCard()}
     ${renderDataSettingsCard()}
     <div class="helptext" style="text-align:center;margin:10px 0">A tournament's scoring, courts and rest times are under that tournament &rarr; Settings &rarr; General.</div>`;
@@ -6652,6 +6733,7 @@ function postRenderHooks(){
   const slot = document.getElementById('topbarActions');
   const acts = !VIEWER && document.querySelector('.main .t-header .t-actions');
   if(slot && acts){ slot.appendChild(acts); }
+  document.querySelectorAll('details[data-guide]').forEach(d=>d.addEventListener('toggle', ()=>{ state.guideOpen = state.guideOpen||{}; state.guideOpen[d.getAttribute('data-guide')] = d.open; }));
   const entBox = document.getElementById('evEntriesBox');
   if(entBox) entBox.addEventListener('toggle', ()=>{ state.entriesOpen = state.entriesOpen||{}; state.entriesOpen[entBox.getAttribute('data-ev')] = entBox.open; });
   const addForm = document.getElementById('tAddPlayerForm');
