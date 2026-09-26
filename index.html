@@ -1081,7 +1081,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260926.180809';
+const APP_BUILD = '20260926.191128';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3134,6 +3134,13 @@ async function confirmFinishTournament(t){
   }, 'Tournament finished - champions published');
   state.tab = 'overview';
 }
+async function confirmReopenTournament(t){
+  if(!await confirmDialog('Reopen ' + t.name + '? You can add events and players again. Finished events keep their results and champions - reopen an event from Settings \u2192 Draws to play on.', {title:'Reopen tournament', okLabel:'Reopen', danger:false})) return;
+  await act(async ()=>{
+    await Store.update('tournaments', t.id, {status:'in_progress', finishedAt:null});
+    await audit(t.id, state.role, 'tournament_reopened', t.name);
+  }, 'Tournament reopened');
+}
 function renderChampionsCard(t){
   const rows = tEvents(t.id).filter(e=>e.status==='completed').map(e=>({e, c:eventChampions(e.id)})).filter(r=>r.c.length);
   if(!rows.length) return '';
@@ -4349,8 +4356,8 @@ function renderTournamentDetail(){
       <div><h2>${esc(t.name)}</h2><div class="t-sub">${esc(fmtDate(t.startDate))}${t.venue?' &middot; '+esc(t.venue):''} ${tournamentStatusPill(t, true)}${!VIEWER && isShareLive(t)?` <span class="pill court" title="Anyone with the link can follow this tournament">${ICONS.link} Live link on</span>`:''}${!VIEWER && t.share && t.share.expired && state.role==='admin'?` <span class="pill" title="Not changed for ${SHARE_KEEP_DAYS} days, so the link was removed">${ICONS.link} Link expired</span>`:''}</div></div>
       ${state.role==='admin' ? `<div class="t-actions" data-more-scope data-more-title="${esc(t.name)}">
         <button class="btn btn-sm" id="btnShareTournament" aria-label="Share live link" title="Share live link">${ICONS.share} Share</button>
-        <button class="btn btn-primary btn-sm m-overflow" id="btnRegisterPlayerHeader">${ICONS.plus} Register player</button>
-        ${t.status!=='completed'?`<button class="btn btn-sm m-overflow" id="btnFinishTournament">${ICONS.trophy} Finish tournament</button>`:''}
+        ${t.status!=='completed'?`<button class="btn btn-primary btn-sm m-overflow" id="btnRegisterPlayerHeader">${ICONS.plus} Register player</button>`:''}
+        ${t.status!=='completed'?`<button class="btn btn-sm m-overflow" id="btnFinishTournament">${ICONS.trophy} Finish tournament</button>`:`<button class="btn btn-sm m-overflow" id="btnReopenTournament">${ICONS.undo} Reopen tournament</button>`}
         <button class="btn btn-sm m-overflow" id="btnEditTournament">${ICONS.edit} Edit tournament</button>
         <button class="btn btn-danger btn-sm m-overflow" id="btnDeleteTournament">${ICONS.trash} Delete tournament</button>
         ${moreMenuBtn()}
@@ -4458,10 +4465,10 @@ function renderEventsTab(t){
   return `
     <div class="row between wrap" style="margin-bottom:12px">
       <div class="helptext">${evs.length} event${evs.length===1?'':'s'}</div>
-      <button class="btn btn-primary btn-sm" id="btnNewEvent">${ICONS.plus} Add event</button>
+      <button class="btn btn-primary btn-sm" id="btnNewEvent" ${t.status==='completed'?'disabled title="Reopen the tournament to add events"':''}>${ICONS.plus} Add event</button>
     </div>
     ${evs.length ? `<div class="cat-grid">${evs.map(renderEventCard).join('')}</div>
-      <div class="helptext" style="margin-top:10px">Tap an event to see its matches. Players, entries and the draw are set up under Settings &rarr; Draws.</div>` : `<div class="empty-tab">No events yet. Add one (e.g. Men's Singles).</div>`}
+      <div class="helptext" style="margin-top:10px">${t.status==='completed' ? 'This tournament is finished. To add an event, reopen it from the &#8943; menu at the top.' : 'Tap an event to see its matches. Players, entries and the draw are set up under Settings &rarr; Draws.'}</div>` : `<div class="empty-tab">No events yet. Add one (e.g. Men's Singles).</div>`}
   `;
 }
 function renderEventCard(ev){
@@ -4685,7 +4692,7 @@ function renderDrawsTab(t){
 }
 function renderAdminDrawsTab(t){
   const evs = tEvents(t.id);
-  if(!evs.length) return `<div class="empty-tab">No events yet. <button class="btn btn-sm btn-primary" id="btnNewEvent" style="margin-left:6px">${ICONS.plus} Add event</button></div>`;
+  if(!evs.length) return `<div class="empty-tab">No events yet. <button class="btn btn-sm btn-primary" id="btnNewEvent" style="margin-left:6px" ${t.status==='completed'?'disabled':''}>${ICONS.plus} Add event</button></div>`;
   let selId = state.filters.drawEventId;
   if(!evs.find(e=>e.id===selId)) selId = (evs.find(e=>eventDraw(e.id))||evs[0]).id;
   state.filters.drawEventId = selId;
@@ -6319,7 +6326,8 @@ document.addEventListener('click', async (e)=>{
     case 'btnEditTournament': if(t) openTournamentDialog(t); return;
     case 'btnRegisterPlayerHeader': if(t) openAdminRegisterDialog(t); return;
     case 'btnDeleteTournament': if(t && await confirmDialog('Delete "'+t.name+'" and everything in it? This cannot be undone.')) await deleteTournamentCascade(t.id); return;
-    case 'btnNewEvent': if(t) openEventDialog(t.id); return;
+    case 'btnNewEvent': if(t){ if(t.status==='completed'){ toast('This tournament is finished. Reopen it to add events.', true); return; } openEventDialog(t.id); } return;
+    case 'btnReopenTournament': if(t){ await confirmReopenTournament(t); render(); } return;
     case 'btnEditEvent': { const ev=eventById(state.eventId); if(ev) openEventDialog(t.id, ev); return; }
     case 'btnBuildEntries': { const ev=eventById(state.eventId); if(ev){ await buildEntriesFromRegistrations(ev); render(); } return; }
     case 'btnGenerateDraw': {
