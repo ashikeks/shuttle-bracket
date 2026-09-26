@@ -606,6 +606,9 @@
   .finish-hint{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:var(--surface); border:1px dashed var(--border); border-radius:12px; padding:10px 12px; margin-bottom:14px; font-size:13px; font-weight:600; }
   .btn-start{ background:color-mix(in srgb, var(--gold) 14%, var(--surface)); border-color:color-mix(in srgb, var(--gold) 45%, var(--border)); color:var(--ink); font-weight:800; }
   .btn-start svg{ color:var(--gold); width:15px; height:15px; }
+  .sb-warn{ display:flex; gap:8px; align-items:flex-start; margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--danger-soft, rgba(220,50,50,.1)); color:var(--danger); font-size:12.5px; font-weight:600; }
+  .sb-warn svg{ width:16px; height:16px; flex:none; margin-top:1px; }
+  .g-remove{ float:right; border:none; background:none; color:var(--danger); font:inherit; font-size:12px; font-weight:700; cursor:pointer; padding:0; }
   .sb-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:0 12px; align-items:start; }
   @media (max-width:700px){ .sb-grid{ grid-template-columns:minmax(0,1fr); } }
   .sb.me-match{ border-color:var(--court); }
@@ -987,6 +990,24 @@ const ScoreRules = {
     if(hi-lo<by) return null;                            // still in deuce, unfinished
     return (hi-lo===by && lo>=P-by+1) ? null : 'the game would have ended earlier';
   },
+  /* Problems with the games as a whole: a game played after one side had already
+     won the match (e.g. a 3rd game at 2-0 in best of 3), or a later game with a
+     score while an earlier one is unfinished. Returns {index, reason} or null. */
+  matchProblem(games, cfg){
+    cfg = cfg || DEFAULT_SCORING;
+    const need = this.gamesNeeded(cfg);
+    let w1=0, w2=0;
+    for(let i=0;i<games.length;i++){
+      const g = games[i];
+      const played = (g.a|0) || (g.b|0);
+      if((w1>=need || w2>=need) && played) return {index:i, reason:'the match was already won '+Math.max(w1,w2)+'-'+Math.min(w1,w2)+' after game '+i+', so game '+(i+1)+' isn\'t played'};
+      const w = this.gameWinner(g, cfg);
+      if(!w && played && games.slice(i+1).some(x=>(x.a|0)||(x.b|0))) return {index:i, reason:'game '+(i+1)+' isn\'t finished, so there can\'t be a score for game '+(i+2)};
+      if(w===1) w1++; else if(w===2) w2++;
+    }
+    if(games.length > (cfg.bestOf||3)) return {index:cfg.bestOf||3, reason:'best of '+(cfg.bestOf||3)+' has at most '+(cfg.bestOf||3)+' games'};
+    return null;
+  },
   validGameScore(g, cfg){
     cfg = cfg || DEFAULT_SCORING;
     if(g.a<0||g.b<0) return false;
@@ -1081,7 +1102,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260926.191128';
+const APP_BUILD = '20260926.192934';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -4845,6 +4866,7 @@ function renderScoreboard(m, opts){
     : ['cancelled','postponed','bye'].includes(m.status) ? esc(m.status.replace(/_/g,' '))
     : opts.hideTime ? '' : (m.scheduledStart ? esc(fmtDateTime(m.scheduledStart)) : 'Not scheduled');
   const e1ok = e1 && e2;
+  const scoreIssue = (m.games||[]).length ? ScoreRules.matchProblem(m.games, scoringFor(ev, tournamentById(m.tournamentId), m)) : null;
   const canPlay = e1ok && !['completed','bye','cancelled'].includes(m.status);
   const canStart = canPlay && !live && ['scheduled','called','pending','postponed'].includes(m.status);
   const acts = opts.actions ? `<div class="sb-acts no-print">
@@ -4859,6 +4881,7 @@ function renderScoreboard(m, opts){
   return `<div class="sb ${live?'live':''} ${done?'done':''}" data-match-id="${m.id}" data-open-match="${m.id}">
     <div class="sb-meta"><span class="sb-ev">${opts.hideEvent?'':esc((ev||{}).name||'')+' &middot; '}${esc(roundLabelForMatch(m))}</span><span class="sb-when">${[court?esc(court.name):'', status].filter(Boolean).join(' &middot; ')}</span></div>
     ${line(e1,'a')}${line(e2,'b')}
+    ${scoreIssue && opts.actions ? `<div class="sb-warn">${ICONS.warn}<span>This score isn't possible: ${esc(scoreIssue.reason)}. Tap Edit score to fix it.</span></div>` : ''}
     ${acts}
   </div>`;
 }
@@ -6094,6 +6117,8 @@ function openScoreDialog(match){
     if(bad>=0){ toast('Game '+(bad+1)+': scores can\'t go above '+(cfg.capPoints||30)+' points', true); return; }
     const odd = games.findIndex(g=>ScoreRules.gameProblem(g, cfg));
     if(odd>=0){ const g=games[odd]; toast('Game '+(odd+1)+': '+g.a+'-'+g.b+' isn\'t possible, '+ScoreRules.gameProblem(g, cfg)+' ('+describeScoring(cfg)+').', true); return; }
+    const mp = ScoreRules.matchProblem(games, cfg);
+    if(mp){ toast('That score isn\'t possible: ' + mp.reason + '.', true); return; }
     const winner = ScoreRules.matchWinner(games, cfg);
     const decided = ['completed','walkover','retired'].includes(m.status);
     btn.disabled = true;
@@ -6145,8 +6170,13 @@ function updateScoreSummary(){
   const w1 = dlgScoreDraft.games.filter(g=>ScoreRules.gameWinner(g,cfg)===1).length;
   const w2 = dlgScoreDraft.games.filter(g=>ScoreRules.gameWinner(g,cfg)===2).length;
   const sum = body.querySelector('#scoreSummary');
-  const badIdx = dlgScoreDraft.games.findIndex(g=>ScoreRules.gameProblem(g,cfg));
-  if(sum && badIdx>=0){
+  let badIdx = dlgScoreDraft.games.findIndex(g=>ScoreRules.gameProblem(g,cfg));
+  const mp = badIdx<0 ? ScoreRules.matchProblem(dlgScoreDraft.games, cfg) : null;
+  if(mp) badIdx = mp.index;
+  if(sum && mp){
+    sum.className = 'score-summary bad';
+    sum.textContent = 'Not possible: ' + mp.reason;
+  } else if(sum && badIdx>=0){
     sum.className = 'score-summary bad';
     sum.textContent = 'Check game '+(badIdx+1)+' · '+describeScoring(cfg);
   } else if(sum){
@@ -6164,6 +6194,8 @@ function updateScoreSummary(){
     note.classList.toggle('bad', !!problem);
     note.textContent = problem ? g.a+'-'+g.b+' isn\'t possible: '+problem : w ? (w===1?e1n:e2n)+' won this game' : '';
   });
+  const addG = document.getElementById('btnAddCorrectGame');
+  if(addG) addG.style.display = winner ? 'none' : '';   // no further game once someone has won the match
   const save = document.getElementById('btnSaveCorrect');
   const decided = ['completed','walkover','retired'].includes(m.status);
   if(save && !decided) save.textContent = (winner && badIdx<0) ? 'Save result' : 'Save score';
@@ -6189,6 +6221,9 @@ function renderScoreEditorBody(){
     inp.addEventListener('input', ()=>{ readScoreInputs(); updateScoreSummary(); });
     inp.addEventListener('focus', ()=>{ try{ inp.select(); }catch(e){} });
   });
+  body.querySelectorAll('[data-sc-remove]').forEach(b=>b.addEventListener('click', ()=>{
+    readScoreInputs(); dlgScoreDraft.games.splice(+b.getAttribute('data-sc-remove'), 1); renderScoreEditorBody();
+  }));
   const addBtn = document.getElementById('btnAddCorrectGame');
   if(addBtn) addBtn.addEventListener('click', ()=>{
     readScoreInputs(); dlgScoreDraft.games.push({a:0,b:0}); renderScoreEditorBody();
@@ -6200,7 +6235,7 @@ function scoreEditorRows(games, cfg, e1n, e2n){
   return games.map((g,i)=>{
     const w = ScoreRules.gameWinner(g,cfg);
     return `<div class="game-block">
-      <div class="g-label">Game ${i+1}</div>
+      <div class="g-label">Game ${i+1}${i>0 && i===games.length-1 ? `<button type="button" class="g-remove" data-sc-remove="${i}">Remove game</button>` : ''}</div>
       <div class="score-row"><span class="who">${esc(e1n)}</span><div class="stepper">
         <button type="button" data-sc-step="-1" data-sc-game="${i}" data-sc-side="a">&minus;</button>
         <input class="score-input mono" type="number" min="0" inputmode="numeric" pattern="[0-9]*" data-sc-game="${i}" data-sc-side="a" value="${g.a}">
