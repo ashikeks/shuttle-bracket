@@ -627,6 +627,17 @@
   .guide-sec li::marker{ color:var(--court); font-weight:800; }
   .guide-sec ul{ margin:6px 0 0; padding-left:18px; }
   .guide-sec ul li{ margin-bottom:3px; }
+  .locked-note{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; border-radius:12px; background:var(--surface-2); border:1px dashed var(--border); color:var(--muted); font-size:13px; font-weight:600; margin-bottom:12px; }
+  .locked-note > svg{ width:16px; height:16px; color:var(--court); flex:none; }
+  .locked-note > span{ flex:1; min-width:180px; }
+  .plain-fs{ border:none; margin:0; padding:0; min-width:0; }
+  .plain-fs[disabled] input, .plain-fs[disabled] select{ opacity:.6; }
+  .ev-acts{ display:flex; justify-content:flex-end; gap:8px; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); }
+  .res-link{ width:100%; display:flex; align-items:center; gap:12px; text-align:left; padding:13px 14px; margin:4px 0 14px; border-radius:14px; border:1px solid var(--border); background:var(--surface); color:var(--ink); font:inherit; cursor:pointer; }
+  .res-link > svg:first-child{ width:18px; height:18px; color:var(--court); flex:none; }
+  .res-link > span{ flex:1; font-weight:800; font-size:15px; }
+  .res-link small{ display:block; font-weight:600; font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .res-link > svg:last-child{ width:18px; height:18px; color:var(--faint); flex:none; }
   .sb-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:0 12px; align-items:start; }
   @media (max-width:700px){ .sb-grid{ grid-template-columns:minmax(0,1fr); } }
   .sb.me-match{ border-color:var(--court); }
@@ -1120,7 +1131,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {url:'', key:'', viewerUrl:''};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260926.204840';
+const APP_BUILD = '20260927.103815';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3173,12 +3184,44 @@ async function confirmFinishTournament(t){
   }, 'Tournament finished - champions published');
   state.tab = 'overview';
 }
+/* ============ LOCKED (FINISHED) TOURNAMENTS AND EVENTS ============
+   A finished tournament, or a finished event, is read-only until it is reopened:
+   no registrations, courts, draws, scheduling or scores. */
+function tLocked(t){ return !!t && ['completed','cancelled'].includes(t.status); }
+function evLocked(ev){ return !!ev && (ev.status==='completed' || tLocked(tournamentById(ev.tournamentId))); }
+function matchLocked(m){ return !!m && evLocked(eventById(m.eventId)); }
+function lockReason(t, ev){
+  if(tLocked(t)) return t.name + ' is finished. Reopen it (\u22EF \u2192 Reopen tournament) to make changes.';
+  if(ev && ev.status==='completed') return ev.name + ' is finished. Reopen the event to make changes.';
+  return null;
+}
+const LOCK_T_IDS = new Set(['btnRegisterPlayerHeader','btnNewEvent','btnNewCourt','btnTournamentAddPlayer','btnNewPlayerFromTournament','btnEditTournament','btnSaveScoring','btnSaveLogistics','btnAssignAny']);
+const LOCK_EV_IDS = new Set(['btnBuildEntries','btnGenerateDraw','btnGenKnockout','btnGenNextMexicanoRound','btnFinishMexicano','btnEditEvent','btnSwapEntries']);
+/* Called first on every click: returns a message when the click would change something locked. */
+function lockedClickMessage(target, t){
+  if(!t || state.role!=='admin' || VIEWER) return null;
+  const btn = target.closest('button, [data-open-live], [data-open-schedule], [data-open-decide], [data-open-correct]');
+  if(!btn) return null;
+  if(btn.id && LOCK_T_IDS.has(btn.id)) return lockReason(t, null);
+  if(btn.id && LOCK_EV_IDS.has(btn.id)) return lockReason(t, eventById(state.eventId));
+  const a = n=>btn.getAttribute(n);
+  if(a('data-toggle-court') || a('data-delete-court') || a('data-delete-event') || a('data-finish-event') || a('data-reopen-event')) return lockReason(t, null);
+  const evAttr = a('data-admin-register-event') || a('data-add-am-rounds') || a('data-am-final') || a('data-am-final-remove');
+  if(evAttr) return lockReason(t, eventById(evAttr));
+  const mid = a('data-open-live') || a('data-open-schedule') || a('data-open-decide') || a('data-open-correct') || a('data-start-match') || a('data-unstart-match');
+  if(mid){ const m = matchById(mid); if(m) return lockReason(t, eventById(m.eventId)); }
+  return null;
+}
 async function confirmReopenTournament(t){
   if(!await confirmDialog('Reopen ' + t.name + '? You can add events and players again. Finished events keep their results and champions - reopen an event from Settings \u2192 Draws to play on.', {title:'Reopen tournament', okLabel:'Reopen', danger:false})) return;
   await act(async ()=>{
     await Store.update('tournaments', t.id, {status:'in_progress', finishedAt:null});
     await audit(t.id, state.role, 'tournament_reopened', t.name);
   }, 'Tournament reopened');
+}
+function lockedNote(t, ev){
+  const tl = tLocked(t);
+  return `<div class="locked-note">${ICONS.check}<span>${tl ? 'This tournament is finished, so it can\'t be changed. Reopen it from the &#8943; menu at the top.' : esc(ev.name)+' is finished, so its players, draw and scores can\'t be changed.'}</span>${!tl && ev ? `<button class="btn btn-sm" data-reopen-event="${ev.id}">${ICONS.undo} Reopen event</button>`:''}</div>`;
 }
 function renderChampionsCard(t){
   const rows = tEvents(t.id).filter(e=>e.status==='completed').map(e=>({e, c:eventChampions(e.id)})).filter(r=>r.c.length);
@@ -4398,7 +4441,7 @@ function renderTournamentDetail(){
         <button class="btn btn-sm" id="btnShareTournament" aria-label="Share live link" title="Share live link">${ICONS.share} Share</button>
         ${t.status!=='completed'?`<button class="btn btn-primary btn-sm m-overflow" id="btnRegisterPlayerHeader">${ICONS.plus} Register player</button>`:''}
         ${t.status!=='completed'?`<button class="btn btn-sm m-overflow" id="btnFinishTournament">${ICONS.trophy} Finish tournament</button>`:`<button class="btn btn-sm m-overflow" id="btnReopenTournament">${ICONS.undo} Reopen tournament</button>`}
-        <button class="btn btn-sm m-overflow" id="btnEditTournament">${ICONS.edit} Edit tournament</button>
+        ${t.status!=='completed'?`<button class="btn btn-sm m-overflow" id="btnEditTournament">${ICONS.edit} Edit tournament</button>`:''}
         <button class="btn btn-danger btn-sm m-overflow" id="btnDeleteTournament">${ICONS.trash} Delete tournament</button>
         ${moreMenuBtn()}
       </div>` : (!VIEWER && isShareLive(t) ? `<div class="t-actions"><button class="btn btn-sm" id="btnShareTournament">${ICONS.share} Share</button></div>` : '')}
@@ -4519,13 +4562,16 @@ function renderEventCard(ev){
   const live = ms.filter(m=>m.status==='in_progress').length;
   const pct = ms.length ? Math.round(100*done/ms.length) : 0;
   return `<div class="cat-card ev-card" data-open-event="${ev.id}">
-    <button class="icon-btn cat-del btn-danger" data-delete-event="${ev.id}" title="Delete event">${ICONS.trash}</button>
+    ${tLocked(tournamentById(ev.tournamentId)) ? '' : `<button class="icon-btn cat-del btn-danger" data-delete-event="${ev.id}" title="Delete event">${ICONS.trash}</button>`}
     <h3>${esc(ev.name)}</h3>
     <div class="sub-txt">${esc(ev.drawFormat.replace(/_/g,' '))} &middot; ${entries} ${isDoublesType(ev.type)&&ev.drawFormat!=='americano'?'teams':'players'}</div>
     ${ev.status==='completed' ? `<div class="champ-banner sm">${ICONS.trophy}<span><small>${eventChampions(ev.id).length?'Champion':'Finished &middot; no matches played'}</small>${esc(eventChampions(ev.id).join(' & '))}</span></div>`
     : draw ? `<div class="ev-prog"><span style="width:${pct}%"></span></div>
       <div class="ev-prog-l"><span>${done} of ${ms.length} matches played</span>${live?`<span class="sb-live">&#9679; ${live} live</span>`:''}</div>`
       : `<div class="ev-prog-l"><span class="pill">No draw yet</span></div>`}
+    ${state.role==='admin' && !tLocked(tournamentById(ev.tournamentId)) && draw ? `<div class="ev-acts no-print">${ev.status==='completed'
+      ? `<button class="btn btn-sm" data-reopen-event="${ev.id}">${ICONS.undo} Reopen event</button>`
+      : `<button class="btn btn-sm btn-finish" data-finish-event="${ev.id}">${ICONS.trophy} Finish event</button>`}</div>` : ''}
   </div>`;
 }
 function renderAdminRegisterRow(t, ev, doubles){
@@ -4638,7 +4684,7 @@ function renderStandingsTable(rows){
 }
 function renderRoundRobinMatchList(matches, editable, sitOutByRound){
   const byRound={}; matches.forEach(m=>(byRound[m.round]=byRound[m.round]||[]).push(m));
-  const rowFn = m=>renderScoreboard(m, {actions: editable && state.role==='admin', hideEvent:true});
+  const rowFn = m=>renderScoreboard(m, {actions: editable && state.role==='admin' && !matchLocked(m), hideEvent:true});
   return Object.keys(byRound).map(Number).sort((a,b)=>a-b).map(r=>{
     const sit = (sitOutByRound && sitOutByRound[r]) || [];
     return `
@@ -4697,7 +4743,7 @@ function renderAmericanoFinalCard(ev, fin, editable){
     return `<div class="am-final-card no-print"><div class="row-h"><h4>Final</h4><button class="btn btn-sm btn-primary" data-am-final="${ev.id}">Create final</button></div>
       <div class="helptext">${ready ? 'All rounds are scored. Pick the top four players for a final.' : 'When the rounds are done, the top four can play a final for the title.'}</div></div>`;
   }
-  const rowFn = m=>renderScoreboard(m, {actions: editable && state.role==='admin', hideEvent:true});
+  const rowFn = m=>renderScoreboard(m, {actions: editable && state.role==='admin' && !matchLocked(m), hideEvent:true});
   const w = fin.winnerEntryId && entryById(fin.winnerEntryId);
   const sc = scoringFor(ev, tournamentById(ev.tournamentId), fin);
   return `<div class="am-final-card"><div class="row-h"><h4>Final</h4>${isAdmin && fin.status!=='completed' ? `<button class="btn btn-sm btn-ghost no-print" data-am-final-remove="${ev.id}">Remove</button>`:''}</div>
@@ -4742,6 +4788,15 @@ function renderAdminDrawsTab(t){
   const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam).length;
   state.entriesOpen = state.entriesOpen||{};
   const open = state.entriesOpen[ev.id]!==undefined ? state.entriesOpen[ev.id] : !draw;
+  if(evLocked(ev)) return `
+    <div class="filter-bar" data-more-scope>
+      <select id="fDrawEventSelect">${evs.map(e=>`<option value="${e.id}" ${e.id===selId?'selected':''}>${esc(e.name)}${eventDraw(e.id)?'':' (no draw yet)'}${e.status==='completed'?' \u2713':''}</option>`).join('')}</select>
+      ${draw?`<button class="btn btn-sm no-print m-overflow" id="btnExportDraw">${ICONS.download} Export CSV</button>
+      <button class="btn btn-sm no-print m-overflow" id="btnPrintDraw">${ICONS.print} Print</button>`:''}
+      ${draw?moreMenuBtn('Event actions'):''}
+    </div>
+    ${lockedNote(t, ev)}
+    ${draw ? renderBracketForEvent(ev, false) : ''}`;
   return `
     <div class="filter-bar" data-more-scope>
       <select id="fDrawEventSelect">${evs.map(e=>`<option value="${e.id}" ${e.id===selId?'selected':''}>${esc(e.name)}${eventDraw(e.id)?'':' (no draw yet)'}</option>`).join('')}</select>
@@ -4831,7 +4886,7 @@ function renderMatchesTab(t){
     .sort((a,b)=> (a.entry1Id&&a.entry2Id?0:1)-(b.entry1Id&&b.entry2Id?0:1) || a.round-b.round || a.position-b.position);
   const tm = m=> m.actualEnd || m.updatedAt || m.scheduledStart || '';
   const done = all.filter(m=>DONE.includes(m.status)).sort((a,b)=>tm(b).localeCompare(tm(a)));
-  const card = m=>renderScoreboard(m, {actions: state.role==='admin', hideTime: !!m.scheduledStart && !DONE.includes(m.status), hideEvent: !!f.eventId});
+  const card = m=>renderScoreboard(m, {actions: state.role==='admin' && !matchLocked(m), hideTime: !!m.scheduledStart && !DONE.includes(m.status), hideEvent: !!f.eventId});
   const grid = list=>`<div class="sb-grid">${list.map(card).join('')}</div>`;
   const section = (title, n, body)=>`<div class="mt-sec"><h3>${title}<span class="n">${n}</span></h3>${body}</div>`;
   const byTime = [];
@@ -4841,7 +4896,7 @@ function renderMatchesTab(t){
     <div data-more-scope>
     ${renderFilterBar(t,'matches',{more: moreMenuBtn()})}
     <div class="export-row no-print">
-      ${state.role==='admin'?`<button class="btn btn-sm btn-primary" id="btnAssignAny">${ICONS.calendar} Schedule a match&hellip;</button>`:''}
+      ${state.role==='admin' && !tLocked(t)?`<button class="btn btn-sm btn-primary" id="btnAssignAny">${ICONS.calendar} Schedule a match&hellip;</button>`:''}
       <button class="btn btn-sm m-overflow" id="btnExportCourtSchedule">${ICONS.download} Export schedule CSV</button>
       <button class="btn btn-sm m-overflow" id="btnExportResults">${ICONS.download} Export results CSV</button>
       <button class="btn btn-sm m-overflow" id="btnPrintSchedule">${ICONS.print} Print</button>
@@ -4855,7 +4910,7 @@ function renderMatchesTab(t){
     ${done.length ? section('Completed', done.length, grid(done)) : ''}
   `;
 }
-function renderMatchRowActionable(m){ return renderScoreboard(m, {actions: state.role==='admin'}); }
+function renderMatchRowActionable(m){ return renderScoreboard(m, {actions: state.role==='admin' && !matchLocked(m)}); }
 /* One scoreboard card for every match list: event and round on top, then one
    line per side - names on the left, a score cell per game on the right.
    The winning side is bold with an accent bar; a live match highlights the
@@ -4942,11 +4997,12 @@ function renderScheduleTab(t){
 function renderCourtsTab(t){
   const courts = tCourts(t.id);
   return `
-    ${state.role==='admin'?`<div class="row wrap" style="margin-bottom:12px"><button class="btn btn-primary btn-sm" id="btnNewCourt">${ICONS.plus} Add court</button></div>`:''}
+    ${state.role==='admin' && !tLocked(t)?`<div class="row wrap" style="margin-bottom:12px"><button class="btn btn-primary btn-sm" id="btnNewCourt">${ICONS.plus} Add court</button></div>`:''}
+    ${tLocked(t)?lockedNote(t):''}
     ${courts.length ? `<div class="court-list">${courts.map(c=>{
       const live = state.matches.find(m=>m.courtId===c.id && m.status==='in_progress');
       return `<div class="court-chip ${c.active?'':'inactive'}"><span class="cc-name">${ICONS.court} ${esc(c.name)} ${live?'<span class="pill live">LIVE</span>':''}</span>
-        ${state.role==='admin'?`<span class="cc-actions"><button class="icon-btn" data-toggle-court="${c.id}" title="${c.active?'Deactivate':'Activate'}" aria-label="${c.active?'Deactivate':'Activate'} ${esc(c.name)}">${c.active?ICONS.check:ICONS.warn}</button>
+        ${state.role==='admin' && !tLocked(t)?`<span class="cc-actions"><button class="icon-btn" data-toggle-court="${c.id}" title="${c.active?'Deactivate':'Activate'}" aria-label="${c.active?'Deactivate':'Activate'} ${esc(c.name)}">${c.active?ICONS.check:ICONS.warn}</button>
         <button class="icon-btn btn-danger" data-delete-court="${c.id}" title="Delete" aria-label="Delete ${esc(c.name)}">${ICONS.trash}</button></span>`:''}
       </div>`;
     }).join('')}</div>` : `<div class="empty-tab">No courts yet.</div>`}
@@ -4957,22 +5013,13 @@ function renderCourtsTab(t){
 function renderResultsTab(t){
   const fp = followedPlayer();
   const evs = tEvents(t.id).filter(ev=> !fp || eventEntries(ev.id).some(en=>entryPlayerIds(en).includes(fp.id)));
-  const DONE = ['completed','walkover','retired'];
-  const tm = m=> m.actualEnd || m.updatedAt || m.scheduledStart || '';
-  const ms = tMatches(t.id).filter(m=>m.entry1Id && m.entry2Id && (!fp || matchHasPlayer(m, fp.id)));
-  const live = ms.filter(m=>m.status==='in_progress');
-  const latest = ms.filter(m=>DONE.includes(m.status)).sort((a,b)=>tm(b).localeCompare(tm(a))).slice(0, Math.max(0, 4-live.length));
-  const recent = live.concat(latest);
+  const played = tMatches(t.id).filter(m=>['completed','walkover','retired'].includes(m.status)).length;
   return `${followNote()}
     <div class="export-row no-print" data-more-scope><button class="btn btn-sm btn-ghost" data-points-help="1">${ICONS.info} How points work</button><button class="btn btn-sm m-overflow" id="btnExportResultsMain">${ICONS.download} Export all results CSV</button><button class="btn btn-sm m-overflow" id="btnPrintResults">${ICONS.print} Print</button>${moreMenuBtn('Export or print results')}</div>
-    <div class="mt-sec"><h3>Standings</h3></div>
     ${evs.map(ev=>renderEventResultsCard(ev)).join('') || `<div class="empty-tab">No events yet.</div>`}
-    ${recent.length ? `<div class="mt-sec"><h3>Latest scores</h3><div class="sb-grid">${recent.map(m=>renderScoreboard(m,{hideTime:true})).join('')}</div>
-      <button class="btn btn-sm btn-ghost res-more no-print" data-tab="matches">All results &rarr;</button></div>` : ''}
+    ${played ? `<button class="res-link no-print" data-goto-results="1">${ICONS.list}<span>Match results<small>${played} played &middot; scores of every match</small></span>${ICONS.chevRight}</button>` : ''}
   `;
 }
-/* One table per event: position, wins-losses, rally points won and ranking points
-   (the last only once the event is decided). Placement shows under the name. */
 function renderEventResultsCard(ev){
   const draw = eventDraw(ev.id);
   const head = (st)=>`<div class="res-h"><h3>${esc(ev.name)}</h3>${st?`<span class="pill ${st==='Final'?'gold':st==='In progress'?'court':''}">${st}</span>`:''}</div>`;
@@ -5241,13 +5288,13 @@ function renderAdminTournamentPlayersTab(t){
   return `
     <div class="row between wrap" style="margin-bottom:12px">
       <div class="helptext">${players.length} player${players.length===1?'':'s'} registered in this tournament</div>
-      <button class="btn btn-sm" id="btnNewPlayerFromTournament">${ICONS.plus} New player profile</button>
+      ${tLocked(t) ? '' : `<button class="btn btn-sm" id="btnNewPlayerFromTournament">${ICONS.plus} New player profile</button>`}
     </div>
-    ${evs.length ? `<details class="card m-details" id="tAddPlayerForm" style="margin-bottom:14px" ${isPhone() && !state.tAddOpen ? '' : 'open'}>
+    ${tLocked(t) ? lockedNote(t) : evs.length ? `<details class="card m-details" id="tAddPlayerForm" style="margin-bottom:14px" ${isPhone() && !state.tAddOpen ? '' : 'open'}>
       <summary class="sub-txt" style="margin-bottom:6px;font-weight:700;display:flex;align-items:center;gap:6px">${ICONS.plus} Add a player to this tournament</summary>
       ${lateEntryNote(t)}
       <div class="row wrap" style="gap:8px">
-        <select id="fTPlayerAddEvent" style="min-width:150px"><option value="">Choose event&hellip;</option>${evs.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
+        <select id="fTPlayerAddEvent" style="min-width:150px"><option value="">Choose event&hellip;</option>${evs.filter(e=>!evLocked(e)).map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
         <select id="fTPlayerAddPlayer" style="min-width:150px"><option value="">Choose player&hellip;</option>${allPlayersSorted.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
         <select id="fTPlayerAddPartner" style="min-width:150px"><option value="">No partner (singles)</option>${allPlayersSorted.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
         <button class="btn btn-primary btn-sm" id="btnTournamentAddPlayer">${ICONS.plus} Add to event</button>
@@ -5427,9 +5474,10 @@ const GUIDE = [
     'Tap an event on the <b>Events</b> tab to see only that event’s matches.'
   ]},
   {id:'results', title:'7 · Results, champions and rankings', steps:[
-    '<b>Results</b> shows each event’s standings (wins-losses, points won, rank points) and the latest scores.',
-    'When an event is done, tap <b>Finish event</b> in Settings → Draws. Unplayed matches are cancelled and the champion is published. <b>Reopen event</b> undoes it.',
+    '<b>Results</b> shows each event’s standings (wins-losses, points won, rank points). <b>Match results</b> at the bottom takes you to the scores of every match.',
+    'When an event is done, tap <b>Finish event</b> on its card in the Events tab (or in Settings → Draws). Unplayed matches are cancelled and the champion is published. <b>Reopen event</b> undoes it.',
     'To close the whole tournament use <b>⋯ → Finish tournament</b> at the top; <b>Reopen tournament</b> is in the same menu.',
+    'A finished event or tournament is locked: no new players, courts, draws, schedule changes or scores until you reopen it.',
     '<b>Rankings</b> (bottom bar) adds up ranking points from every event. Tap <b>How points work</b> there for the table.'
   ]},
   {id:'share', title:'8 · Share a live link', steps:[
@@ -5457,7 +5505,8 @@ function renderSettingsView(){
 }
 function renderTournamentGeneralSettings(t){
   const sc = t.scoring||DEFAULT_SCORING;
-  return `
+  const locked = tLocked(t);
+  return `${locked ? lockedNote(t) : ''}<fieldset class="plain-fs" ${locked?'disabled':''}>
     <div class="card">
       <h3 style="font-family:'Public Sans';font-size:14px;text-transform:none;letter-spacing:0;margin-bottom:8px">Default scoring</h3>
       <div class="field-row">
@@ -5469,7 +5518,7 @@ function renderTournamentGeneralSettings(t){
         <div class="field"><label>Cap points</label><input type="number" id="setCapPoints" value="${sc.capPoints}"></div>
       </div>
       <label class="row" style="font-size:12.5px;gap:6px"><input type="checkbox" id="setDeuce" ${sc.deuceEnabled?'checked':''}> Deuce enabled (win by margin above)</label>
-      <button class="btn btn-primary btn-sm" id="btnSaveScoring" style="margin-top:10px">Save scoring</button>
+      ${locked?'':`<button class="btn btn-primary btn-sm" id="btnSaveScoring" style="margin-top:10px">Save scoring</button>`}
     </div>
     <div class="card">
       <h3 style="font-family:'Public Sans';font-size:14px;text-transform:none;letter-spacing:0;margin-bottom:8px">Logistics</h3>
@@ -5485,9 +5534,9 @@ function renderTournamentGeneralSettings(t){
       <div class="field"><label>Tournament status</label><select id="setStatus">
         ${['draft','registration_open','registration_closed','draw_published','in_progress','completed','cancelled'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s.replace(/_/g,' ')}</option>`).join('')}
       </select></div>
-      <button class="btn btn-primary btn-sm" id="btnSaveLogistics" style="margin-top:10px">Save</button>
+      ${locked?'':`<button class="btn btn-primary btn-sm" id="btnSaveLogistics" style="margin-top:10px">Save</button>`}
     </div>
-  `;
+  </fieldset>`;
 }
 function renderPlayerHome(){
   const me = myPlayer();
@@ -6020,7 +6069,7 @@ function openEventDialog(tid, existing){
 /* ---------- DIALOG: PLAYER / CLUB ---------- */
 function openPlayerDialog(existing, tournamentId){
   const p = existing||{};
-  const evs = (!existing && tournamentId) ? tEvents(tournamentId) : [];
+  const evs = (!existing && tournamentId) ? tEvents(tournamentId).filter(e=>!evLocked(e)) : [];
   const allPlayersSorted = state.players.slice().sort((a,b)=>a.name.localeCompare(b.name));
   const body = `
     <div class="field"><label>Name</label><input id="fPName" value="${esc(p.name||'')}" placeholder="Aiko Tanaka"></div>
@@ -6072,8 +6121,8 @@ function openPlayerDialog(existing, tournamentId){
 /* Always-available admin entry point: "Register player" in the tournament
    header, present on every tab so it's never more than one click away. */
 function openAdminRegisterDialog(t){
-  const evs = tEvents(t.id);
-  if(!evs.length){ toast('Add an event first (Events tab), then players can be registered into it', true); return; }
+  const evs = tEvents(t.id).filter(e=>!evLocked(e));
+  if(!evs.length){ toast(tEvents(t.id).length ? 'Every event is finished. Reopen an event to register players into it.' : 'Add an event first (Events tab), then players can be registered into it', true); return; }
   const allPlayersSorted = state.players.slice().sort((a,b)=>a.name.localeCompare(b.name));
   const body = `
     <div class="field"><label>Event</label><select id="fRegDlgEvent">${evs.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select></div>
@@ -6421,6 +6470,8 @@ document.addEventListener('click', async (e)=>{
 
   const id = e.target.closest('button') ? e.target.closest('button').id : '';
   const t = currentTournament();
+  const lockMsg = state.view==='tdetail' ? lockedClickMessage(e.target, t) : null;
+  if(lockMsg){ e.stopPropagation(); toast(lockMsg, true); return; }
 
   switch(id){
     case 'btnBell': state.notifOpen=!state.notifOpen; state.roleMenuOpen=false; state.searchOpen=false; render(); return;
@@ -6629,6 +6680,7 @@ document.addEventListener('click', async (e)=>{
     ['data-end-game', ()=>{ const m=matchById(state.liveMatchId); if(m) endGameManually(m).then(render); }],
     ['data-add-am-rounds', v=>{ const ev=eventById(v); if(ev) openAddAmericanoRoundsDialog(ev); }],
     ['data-points-help', ()=>openPointsHelp()],
+    ['data-goto-results', ()=>{ state.tab='matches'; state.filters.matches={}; render(); requestAnimationFrame(()=>{ const h=[...document.querySelectorAll('.mt-sec > h3')].find(x=>/Completed/.test(x.textContent)); if(h) h.scrollIntoView({block:'start'}); }); }],
     ['data-filter-toggle', v=>{ state.mFilterOpen = state.mFilterOpen||{}; state.mFilterOpen[v] = !state.mFilterOpen[v]; render(); }],
     ['data-ev-sub', v=>{ state.eventSub = v; state.eventSubFor = state.eventId; render(); }],
     ['data-start-match', async v=>{ const m=matchById(v); if(m){ await startMatch(m); render(); } }],
@@ -6699,6 +6751,13 @@ document.addEventListener('change', async (e)=>{
   if(target.id==='globalSearch'){ state.search=target.value; state.searchOpen=true; rerenderPreservingFocus(target); return; }
   if(target.id==='selViewingPlayer'){ setViewingPlayer(target.value||null); return; }
   if(target.id==='viewerFollow'){ setFollow(target.value||null); return; }
+  if(target.matches('[data-reg-status], [data-seed-input], #fDrawFormat, #fThirdPlace, #fGroupSize')){
+    const regL = target.matches('[data-reg-status]') && state.registrations.find(r=>r.id===target.getAttribute('data-reg-status'));
+    const entL = target.matches('[data-seed-input]') && entryById(target.getAttribute('data-seed-input'));
+    const evL = eventById((regL&&regL.eventId) || (entL&&entL.eventId) || target.getAttribute('data-event-id') || state.eventId);
+    const msg = evL && lockReason(tournamentById(evL.tournamentId), evL);
+    if(msg){ toast(msg, true); render(); return; }
+  }
   if(target.matches('[data-reg-status]')){
     const reg = state.registrations.find(r=>r.id===target.getAttribute('data-reg-status'));
     if(reg) await setRegistrationStatus(reg, target.value);
