@@ -1152,7 +1152,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260928.114230';
+const APP_BUILD = '20260928.123013';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3333,6 +3333,36 @@ function normGender(g){
   if(['female','f','woman','women'].includes(v)) return 'female';
   return 'unspecified';
 }
+/* Mixed doubles pairs are one man and one woman. Returns why a pair can't
+   register (or enter the draw), or '' when it can. Other events: always ''. */
+function mixedPairProblem(ev, playerId, partnerId){
+  if(!ev || ev.type!=='mixed_doubles' || !playerId || !partnerId) return '';
+  return mixedGenderProblem(playerById(playerId), playerById(partnerId));
+}
+/* a, b: {name, gender} (b may be a player not saved yet). */
+function mixedGenderProblem(a, b){
+  const pair = [a||{}, b||{}];
+  const unset = pair.filter(p=>normGender(p.gender)==='unspecified');
+  if(unset.length) return 'Mixed doubles needs one man and one woman. Set the gender (Male or Female) for '+unset.map(p=>p.name||'this player').join(' and ')+' first.';
+  const g = normGender(pair[0].gender);
+  if(g===normGender(pair[1].gender)) return 'Mixed doubles needs one man and one woman - '+pair[0].name+' and '+pair[1].name+' are both '+(g==='male'?'men':'women')+'.';
+  return '';
+}
+/* Partner pickers: for a mixed doubles event, grey out players who can't pair
+   with the chosen player (same gender, or no gender set). playerGender may be
+   unknown (no player chosen yet), which only rules out players without one. */
+function syncMixedPartnerOptions(ev, playerGender, partnerSel){
+  if(!partnerSel) return;
+  const mixed = !!ev && ev.type==='mixed_doubles';
+  const g = playerGender ? normGender(playerGender) : null;
+  [...partnerSel.options].forEach(o=>{
+    if(!o.value) return;
+    const og = normGender((playerById(o.value)||{}).gender);
+    o.disabled = mixed && (og==='unspecified' || (!!g && g!=='unspecified' && og===g));
+  });
+  if(partnerSel.selectedIndex>0 && partnerSel.options[partnerSel.selectedIndex].disabled) partnerSel.value = '';
+}
+function genderOfPlayerId(id){ const p = id && playerById(id); return p ? p.gender : null; }
 async function createPlayer(data){
   return act(async ()=> Store.add('players', {
     name:data.name, photoUrl:data.photoUrl||'', dob:data.dob||'', gender:data.gender||'unspecified',
@@ -3376,6 +3406,8 @@ async function registerForEvent(tournamentId, eventId, playerId, partnerId){
     return;
   }
   if(partnerId && partnerId===playerId){ toast('A pair cannot be the same player twice', true); return; }
+  const mixedIssue = mixedPairProblem(eventById(eventId), playerId, partnerId);
+  if(mixedIssue){ toast(mixedIssue, true); return; }
   if(findDuplicateRegistration(eventId, playerId)){ toast('Already registered for this event', true); return; }
   if(partnerId && findDuplicateRegistration(eventId, partnerId)){ toast('Partner is already registered for this event', true); return; }
   return act(async ()=>{
@@ -3390,6 +3422,8 @@ async function registerForEvent(tournamentId, eventId, playerId, partnerId){
 async function adminRegisterPlayer(tournamentId, eventId, playerId, partnerId){
   if(!playerId){ toast('Pick a player first', true); return; }
   if(partnerId && partnerId===playerId){ toast('A pair cannot be the same player twice', true); return; }
+  const mixedIssue = mixedPairProblem(eventById(eventId), playerId, partnerId);
+  if(mixedIssue){ toast(mixedIssue, true); return; }
   if(findDuplicateRegistration(eventId, playerId)){ toast('That player is already registered for this event', true); return; }
   if(partnerId && findDuplicateRegistration(eventId, partnerId)){ toast('That partner is already registered for this event', true); return; }
   return act(async ()=>{
@@ -3437,9 +3471,11 @@ async function buildEntriesFromRegistrations(event){
     for(const en of existing) await Store.remove('entries', en.id);
     const doubles = isDoublesType(event.type);
     const seen = new Set();
+    const badMixed = [];
     for(const r of regs){
       if(seen.has(r.id)) continue;
       if(doubles && !r.partnerId) continue; // needs a partner before entering
+      if(mixedPairProblem(event, r.playerId, r.partnerId)){ badMixed.push(playerName(r.playerId)+' / '+playerName(r.partnerId)); continue; }
       seen.add(r.id);
       const p1club = (playerById(r.playerId)||{}).clubId || null;
       await Store.add('entries', {
@@ -3447,6 +3483,7 @@ async function buildEntriesFromRegistrations(event){
         seed:null, clubId:p1club, registrationId:r.id
       });
     }
+    if(badMixed.length) toast('Left out of '+event.name+' (mixed doubles needs one man and one woman): '+badMixed.join(', '), true);
   }, 'Entries built from confirmed registrations');
 }
 
@@ -5109,7 +5146,8 @@ function renderRegisterTab(t){
           ${ri.open && reg.playerId===me.id?`<button class="btn btn-sm btn-danger" data-withdraw-reg="${reg.id}">Withdraw</button>`:''}</div>`;
       }
       if(!ri.open) return `<div class="list-row"><span class="grow main-txt">${esc(ev.name)} <span class="sub-txt">${esc(ev.type.replace(/_/g,' '))}</span></span><span class="pill">Closed</span></div>`;
-      const otherPlayers = state.players.filter(p=>p.id!==me.id).sort((a,b)=>a.name.localeCompare(b.name));
+      const myG = normGender(me.gender);
+      const otherPlayers = state.players.filter(p=>p.id!==me.id && (ev.type!=='mixed_doubles' || myG==='unspecified' || (normGender(p.gender)!=='unspecified' && normGender(p.gender)!==myG))).sort((a,b)=>a.name.localeCompare(b.name));
       return `<div class="list-row wrap">
         <span class="grow main-txt">${esc(ev.name)} <span class="sub-txt">${esc(ev.type.replace(/_/g,' '))}</span></span>
         ${doubles?`<select data-partner-select="${ev.id}" style="min-width:160px"><option value="">Choose partner&hellip;</option>${otherPlayers.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>`:''}
@@ -6140,10 +6178,13 @@ function openPlayerDialog(existing, tournamentId){
   openDialog(existing?'Edit player':'Add player', body, stdFoot('btnSavePlayerDlg', existing?'Save':'Add'));
   const regEventSel = document.getElementById('fPRegEvent');
   if(regEventSel){
-    regEventSel.onchange = ()=>{
+    const syncPartner = ()=>{
       const ev = eventById(regEventSel.value);
       document.getElementById('fPRegPartnerWrap').hidden = !(ev && isDoublesType(ev.type));
+      syncMixedPartnerOptions(ev, document.getElementById('fPGender').value, document.getElementById('fPRegPartner'));
     };
+    regEventSel.onchange = syncPartner;
+    document.getElementById('fPGender').addEventListener('change', syncPartner);
   }
   document.getElementById('btnSavePlayerDlg').onclick = async ()=>{
     const name = document.getElementById('fPName').value.trim();
@@ -6159,6 +6200,10 @@ function openPlayerDialog(existing, tournamentId){
       const eventId = regEventSel ? regEventSel.value : '';
       const ev = eventById(eventId);
       if(ev && isDoublesType(ev.type) && !document.getElementById('fPRegPartner').value){ toast('Choose a partner for this doubles event', true); return; }
+      if(ev && ev.type==='mixed_doubles'){
+        const mixedIssue = mixedGenderProblem({name, gender:data.gender}, playerById(document.getElementById('fPRegPartner').value));
+        if(mixedIssue){ toast(mixedIssue, true); return; }
+      }
       const newId = await createPlayer(data);
       if(ev){
         const partnerId = document.getElementById('fPRegPartner').value || null;
@@ -6183,8 +6228,9 @@ function openAdminRegisterDialog(t){
   `;
   openDialog('Register a player', body, stdFoot('btnSaveRegDlg','Register'));
   const eventSel = document.getElementById('fRegDlgEvent');
-  const syncPartner = ()=>{ const ev=eventById(eventSel.value); document.getElementById('fRegDlgPartnerWrap').hidden = !(ev && isDoublesType(ev.type)); };
-  eventSel.onchange = syncPartner; syncPartner();
+  const syncPartner = ()=>{ const ev=eventById(eventSel.value); document.getElementById('fRegDlgPartnerWrap').hidden = !(ev && isDoublesType(ev.type));
+    syncMixedPartnerOptions(ev, genderOfPlayerId(document.getElementById('fRegDlgPlayer').value), document.getElementById('fRegDlgPartner')); };
+  eventSel.onchange = syncPartner; document.getElementById('fRegDlgPlayer').onchange = syncPartner; syncPartner();
   document.getElementById('btnRegDlgNewPlayer').onclick = ()=>{ closeGenericDialog(); openPlayerDialog(null, t.id); };
   document.getElementById('btnSaveRegDlg').onclick = async ()=>{
     const eventId = eventSel.value;
@@ -6193,6 +6239,8 @@ function openAdminRegisterDialog(t){
     const ev = eventById(eventId);
     if(!playerId){ toast('Choose a player first', true); return; }
     if(ev && isDoublesType(ev.type) && !partnerId){ toast('Choose a partner first', true); return; }
+    const mixedIssue = mixedPairProblem(ev, playerId, partnerId);
+    if(mixedIssue){ toast(mixedIssue, true); return; }
     await adminRegisterPlayer(t.id, eventId, playerId, partnerId);
     closeGenericDialog(); render();
   };
@@ -6841,6 +6889,15 @@ document.addEventListener('change', async (e)=>{
   }
   if(target.id==='fReportTournament'){ state.tid = target.value||null; render(); return; }
   if(target.id==='fDrawEventSelect'){ state.filters.drawEventId = target.value; render(); return; }
+  if(target.id==='fTPlayerAddEvent' || target.id==='fTPlayerAddPlayer'){
+    syncMixedPartnerOptions(eventById(document.getElementById('fTPlayerAddEvent').value), genderOfPlayerId(document.getElementById('fTPlayerAddPlayer').value), document.getElementById('fTPlayerAddPartner'));
+    return;
+  }
+  if(target.matches('[data-admin-player-select]')){
+    const evId = target.getAttribute('data-admin-player-select');
+    syncMixedPartnerOptions(eventById(evId), genderOfPlayerId(target.value), document.querySelector('[data-admin-partner-select="'+evId+'"]'));
+    return;
+  }
 });
 
 document.addEventListener('input', (e)=>{
