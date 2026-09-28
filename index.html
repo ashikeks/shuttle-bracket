@@ -293,6 +293,7 @@
   .list-row .main-txt{ font-weight:600; font-size:13.5px; }
   .list-row .sub-txt{ color:var(--muted); font-size:11.5px; }
   .list-row .grow{ flex:1; min-width:120px; }
+  .seed-tag{ display:inline-block; min-width:16px; margin-right:6px; padding:0 4px; border-radius:6px; background:var(--court-soft); color:var(--court); font-size:10.5px; font-weight:800; text-align:center; font-style:normal; }
   .seed-badge{ width:24px; height:24px; border-radius:999px; background:var(--court-soft); color:var(--court); font-weight:700; font-size:11.5px; display:flex; align-items:center; justify-content:center; flex:none; }
   .avatar{ width:30px; height:30px; border-radius:999px; background:var(--surface-2); color:var(--muted); font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; flex:none; overflow:hidden; }
   .avatar img{ width:100%; height:100%; object-fit:cover; }
@@ -1152,7 +1153,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260928.155522';
+const APP_BUILD = '20260928.164547';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3500,6 +3501,12 @@ async function buildEntriesFromRegistrations(event){
     const allRegs = await Store.getAll('registrations', [['eventId', event.id]]);
     const regs = allRegs.filter(r=> r.status==='confirmed');
     const existing = await Store.getAll('entries', [['eventId', event.id]]);
+    // Seeds are set on entries, which are rebuilt here (Generate draw does it too): keep them.
+    const pairKey = (a,b)=>[a,b].filter(Boolean).sort().join('+');
+    const seedFor = {};
+    existing.forEach(en=>{ const sd = validSeed(en.seed); if(sd==null) return;
+      if(en.registrationId) seedFor['r:'+en.registrationId] = sd;
+      seedFor['p:'+pairKey(en.player1Id, en.player2Id)] = sd; });
     for(const en of existing) await Store.remove('entries', en.id);
     const doubles = isDoublesType(event.type);
     const seen = new Set();
@@ -3510,14 +3517,19 @@ async function buildEntriesFromRegistrations(event){
       if(mixedPairProblem(event, r.playerId, r.partnerId)){ badMixed.push(playerName(r.playerId)+' / '+playerName(r.partnerId)); continue; }
       seen.add(r.id);
       const p1club = (playerById(r.playerId)||{}).clubId || null;
+      const p2 = doubles ? r.partnerId : null;
+      const seed = seedFor['r:'+r.id] ?? seedFor['p:'+pairKey(r.playerId, p2)] ?? null;
       await Store.add('entries', {
-        eventId:event.id, player1Id:r.playerId, player2Id: doubles ? r.partnerId : null,
-        seed:null, clubId:p1club, registrationId:r.id
+        eventId:event.id, player1Id:r.playerId, player2Id: p2,
+        seed, clubId:p1club, registrationId:r.id
       });
     }
     if(badMixed.length) toast('Left out of '+event.name+' (mixed doubles needs one man and one woman): '+badMixed.join(', '), true);
   }, 'Entries built from confirmed registrations');
 }
+
+/* A seed is a whole number from 1; anything else means unseeded. */
+function validSeed(v){ const n = parseInt(v,10); return Number.isFinite(n) && n>=1 ? n : null; }
 
 /* ---- Draw generation ---- */
 async function generateDraw(event, opts){
@@ -3527,8 +3539,12 @@ async function generateDraw(event, opts){
   const entriesRaw = eventEntries(event.id).length ? eventEntries(event.id) : await Store.getAll('entries', [['eventId', event.id]]);
   if(entriesRaw.length < 2){ toast('Need at least 2 confirmed entries to generate a draw', true); return; }
   if(event.drawFormat==='americano' && entriesRaw.length < 4){ toast('Americano needs at least 4 confirmed entries', true); return; }
-  const seeded = entriesRaw.filter(e=>e.seed!=null).sort((a,b)=>a.seed-b.seed);
-  const unseeded = entriesRaw.filter(e=>e.seed==null).sort(()=> Math.random()-0.5);
+  /* Seeds first (1, 2, 3 ...), then unseeded players in random order. The
+     knockout plan puts the first entry at seed 1, spreads seeds apart and
+     gives byes to the top of this order, so byes go to the highest seeds;
+     groups use the same order to spread seeds across groups. */
+  const seeded = entriesRaw.filter(e=>validSeed(e.seed)!=null).sort((a,b)=>validSeed(a.seed)-validSeed(b.seed));
+  const unseeded = entriesRaw.filter(e=>validSeed(e.seed)==null).sort(()=> Math.random()-0.5);
   const ordered = [...seeded, ...unseeded];
   const ctx = {tournamentId: event.tournamentId, eventId: event.id, drawId:null};
   const format = event.drawFormat || 'single_elimination';
@@ -4739,7 +4755,8 @@ function renderEventEntriesSection(t, ev){
     </tbody></table></div>` : `<div class="empty-tab">No registrations yet.</div>`}
 
     <div class="section-h"><h3>Entries (${entries.length})</h3></div>
-    ${entries.length ? entries.map(en=>`<div class="list-row"><span class="seed-badge">${en.seed||'-'}</span><span class="grow main-txt">${esc(entryName(en))}</span>
+    ${entries.length && !['round_robin','americano'].includes(ev.drawFormat||'single_elimination') ? `<div class="helptext" style="margin-bottom:8px">Seeds (1 = strongest) are kept apart in the draw - 1 and 2 can only meet in the final. If the draw has byes, they go to the highest seeds first; unseeded entries are placed at random. In groups + knockout, seeds are spread across the groups.</div>` : ''}
+    ${entries.length ? entries.slice().sort((a,b)=>(validSeed(a.seed)??1e9)-(validSeed(b.seed)??1e9)).map(en=>`<div class="list-row"><span class="seed-badge">${en.seed||'-'}</span><span class="grow main-txt">${esc(entryName(en))}</span>
       <input type="number" min="1" class="mono" style="width:56px;border:1px solid var(--border);border-radius:8px;padding:4px;background:var(--bg);color:var(--ink)" data-seed-input="${en.id}" value="${en.seed==null?'':en.seed}" placeholder="seed">
     </div>`).join('') : `<div class="empty-tab">Build entries from confirmed registrations first.</div>`}
   `;
@@ -4804,8 +4821,8 @@ function renderMatchCard(m, maxRound, editable){
   const playable = e1 && e2 && !['completed','bye','cancelled'].includes(m.status);
   const w = m.winnerEntryId;
   return `<div class="match-card ${playable&&editable?'playable':''}" data-match-id="${m.id}" ${m.nextMatchId?`data-next="${m.nextMatchId}"`:''} ${playable&&editable?`data-open-live="${m.id}"`:''} ${!playable?`data-open-match="${m.id}"`:''}>
-    <div class="m-slot ${!e1?'tbd':''} ${w&&w===m.entry1Id?'winner':''}"><span class="name">${esc(matchSideName(m,1))}</span>${e1&&m.games&&m.games.length?bracketScoreCells(m,'a'):''}</div>
-    <div class="m-slot ${!e2?'tbd':''} ${w&&w===m.entry2Id?'winner':''}"><span class="name">${esc(matchSideName(m,2))}</span>${e2&&m.games&&m.games.length?bracketScoreCells(m,'b'):''}</div>
+    <div class="m-slot ${!e1?'tbd':''} ${w&&w===m.entry1Id?'winner':''}"><span class="name">${e1&&validSeed(e1.seed)?`<span class="seed-tag" title="Seed ${validSeed(e1.seed)}">${validSeed(e1.seed)}</span>`:''}${esc(matchSideName(m,1))}</span>${e1&&m.games&&m.games.length?bracketScoreCells(m,'a'):''}</div>
+    <div class="m-slot ${!e2?'tbd':''} ${w&&w===m.entry2Id?'winner':''}"><span class="name">${e2&&validSeed(e2.seed)?`<span class="seed-tag" title="Seed ${validSeed(e2.seed)}">${validSeed(e2.seed)}</span>`:''}${esc(matchSideName(m,2))}</span>${e2&&m.games&&m.games.length?bracketScoreCells(m,'b'):''}</div>
     <div class="m-status ${m.status==='bye'?'bye':''} ${m.status==='in_progress'?'live':''}">${m.status==='bye'?'Bye':m.status==='in_progress'?'Live':m.status==='completed'?'Final':m.status==='walkover'?'Walkover':(m.scheduledStart?esc(fmtTime(m.scheduledStart)):'TBD')}</div>
   </div>`;
 }
@@ -6950,8 +6967,12 @@ document.addEventListener('change', async (e)=>{
   }
   if(target.matches('[data-seed-input]')){
     const entryId = target.getAttribute('data-seed-input');
-    const v = target.value.trim();
-    await act(async ()=> Store.update('entries', entryId, {seed: v?parseInt(v,10):null}));
+    const seed = validSeed(target.value.trim());
+    const en = entryById(entryId);
+    const clash = seed!=null && en && eventEntries(en.eventId).find(x=>x.id!==entryId && validSeed(x.seed)===seed);
+    await act(async ()=> Store.update('entries', entryId, {seed}));
+    if(clash) toast('Seed '+seed+' is also given to '+entryName(clash)+' - give each seed to one entry.', true);
+    if(target.value.trim() && seed==null) target.value = '';
     return;
   }
   if(target.id==='fDrawFormat'){
