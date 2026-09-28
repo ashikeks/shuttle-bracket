@@ -1152,7 +1152,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260928.044418';
+const APP_BUILD = '20260928.114230';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -6227,20 +6227,32 @@ function openScheduleDialog(match){
       <div class="field"><label>Date</label>${dateFieldHtml('fSchDate', dateVal)}</div>
       <div class="field"><label>Time</label><input type="time" id="fSchTime" value="${timeVal}"></div>
     </div>
-    <div class="field"><label>Duration (min)</label><input type="number" id="fSchDur" value="${match.estDurationMin || (t?t.matchDurationMin:30)}"></div>
+    <div class="field"><label>Duration (min)</label><input type="number" id="fSchDur" min="1" value="${scheduleDurationDefault(match, t)}"></div>
     <div id="schConflictNote">${restNote}</div>
   `;
   openDialog('Schedule match', body, stdFoot('btnSaveSchedule','Save'));
   document.getElementById('btnSaveSchedule').onclick = async ()=>{
     const courtId = document.getElementById('fSchCourt').value;
     const date = document.getElementById('fSchDate').value, time = document.getElementById('fSchTime').value;
-    const dur = parseInt(document.getElementById('fSchDur').value,10)||30;
+    const dur = parseInt(document.getElementById('fSchDur').value,10)||scheduleDurationDefault(match, t);
     if(!date||!time){ toast('Pick a date and time', true); return; }
     const iso = new Date(date+'T'+time+':00').toISOString();
     const ok = await assignMatchSchedule(match, courtId||null, iso, dur);
     if(ok) closeGenericDialog();
     render();
   };
+}
+/* Duration shown when scheduling a match. New matches are created with a
+   placeholder 30 min, so an unscheduled match uses the tournament's "Match
+   duration" setting (General -> Logistics). A match that is already scheduled
+   keeps the duration it was given, and one with its own estimate (e.g. a
+   best-of-3 Americano final, 45 min) keeps that. */
+const PLACEHOLDER_MATCH_MIN = 30;
+function scheduleDurationDefault(match, t){
+  const setting = (t && parseInt(t.matchDurationMin,10)) || PLACEHOLDER_MATCH_MIN;
+  if(match.scheduledStart && match.estDurationMin) return match.estDurationMin;
+  if(match.estDurationMin && match.estDurationMin!==PLACEHOLDER_MATCH_MIN) return match.estDurationMin;
+  return setting;
 }
 function openAssignAnyDialog(t){
   const matches = tMatches(t.id).filter(m=>m.entry1Id && m.entry2Id && !['completed','cancelled','bye'].includes(m.status));
