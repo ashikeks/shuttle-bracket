@@ -1153,7 +1153,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260928.165728';
+const APP_BUILD = '20260928.171121';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3549,11 +3549,18 @@ function rankingPointsByPlayer(excludeTournamentId){
   }
   return out;
 }
-/* An entry's ranking: a doubles pair counts both players' points. */
+/* An entry's ranking. A doubles pair gets the average of its two players'
+   individual points (an unranked partner counts as 0), so one strong player
+   with a weak partner isn't seeded like two strong players. */
 function entryRanking(entry, byPlayer){
-  return entryPlayerIds(entry).reduce((acc,pid)=>{ const s = byPlayer[pid]; if(s){ acc.points += s.rankingPoints||0; acc.wins += s.wins||0; } return acc; }, {points:0, wins:0});
+  const players = entryPlayerIds(entry).map(pid=>{ const s = byPlayer[pid]||{}; return {id:pid, name:playerName(pid), points:s.rankingPoints||0, wins:s.wins||0}; });
+  const n = players.length || 1;
+  const avg = k => Math.round(players.reduce((t,p)=>t+p[k], 0) / n * 10) / 10;
+  return {points: avg('points'), wins: avg('wins'), players};
 }
-/* Suggested seeds from the rankings: entries with ranking points, strongest
+function fmtPts(n){ return Number.isInteger(n) ? String(n) : n.toFixed(1); }
+/* Suggested seeds from the rankings: entries with ranking points (pairs: the
+   average of both players), strongest
    first (ties: more wins, then name). How many: the usual 2 seeds below 8
    entries, 4 below 16, 8 below 32, 16 from 32 - raised to the number of byes
    so every bye goes to a seed - and never more than the ranked entries. */
@@ -3576,9 +3583,9 @@ function openSuggestSeedsDialog(ev){
   const entries = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam);
   const hasSeeds = entries.some(e=>validSeed(e.seed)!=null);
   const body = `
-    <div class="helptext" style="margin-bottom:10px">Based on ranking points (Rankings page, from earlier tournaments)${isDoublesType(ev.type)?'; a pair counts both players\' points':''}. ${list.length} of ${entries.length} entries seeded; the rest are placed at random. Byes go to the highest seeds.</div>
+    <div class="helptext" style="margin-bottom:10px">Based on ranking points (Rankings page, from earlier tournaments)${isDoublesType(ev.type)?'; a pair gets the average of its two players\' points (unranked counts as 0)':''}. ${list.length} of ${entries.length} entries seeded; the rest are placed at random. Byes go to the highest seeds.</div>
     <div class="table-scroll"><table class="standings"><thead><tr><th>Seed</th><th>Entry</th><th class="num">Points</th></tr></thead>
-    <tbody>${list.map(r=>`<tr><td class="mono">${r.seed}</td><td>${esc(entryName(r.entry))}</td><td class="num mono">${r.points}</td></tr>`).join('')}</tbody></table></div>
+    <tbody>${list.map(r=>`<tr><td class="mono">${r.seed}</td><td>${esc(entryName(r.entry))}${r.players.length>1?`<div class="sub-txt">(${r.players.map(p=>esc(p.name)+' '+fmtPts(p.points)).join(' + ')}) &divide; 2</div>`:''}</td><td class="num mono">${fmtPts(r.points)}</td></tr>`).join('')}</tbody></table></div>
     ${hasSeeds ? `<div class="helptext" style="margin-top:10px">Applying replaces the seeds already set for this event.</div>` : ''}
     <div class="helptext" style="margin-top:6px">You can still change any seed afterwards. ${eventDraw(ev.id) ? 'Regenerate the draw to use them.' : 'Generate the draw to use them.'}</div>`;
   openDialog('Suggested seeds', body, stdFoot('btnApplySuggestedSeeds', 'Apply seeds'));
@@ -4821,7 +4828,7 @@ function renderEventEntriesSection(t, ev){
     <div class="section-h"><h3>Entries (${entries.length})</h3></div>
     ${entries.length && !['round_robin','americano'].includes(ev.drawFormat||'single_elimination') ? `<div class="helptext" style="margin-bottom:8px">Seeds (1 = strongest) are kept apart in the draw - 1 and 2 can only meet in the final. If the draw has byes, they go to the highest seeds first; unseeded entries are placed at random. In groups + knockout, seeds are spread across the groups.</div>` : ''}
     ${entries.length>=2 && !['round_robin','americano'].includes(ev.drawFormat||'single_elimination') ? `<div class="row wrap" style="gap:8px;margin-bottom:8px"><button type="button" class="btn btn-sm" data-suggest-seeds="${ev.id}">${ICONS.chart} Suggest seeds from rankings</button></div>` : ''}
-    ${entries.length ? entries.slice().sort((a,b)=>(validSeed(a.seed)??1e9)-(validSeed(b.seed)??1e9)).map(en=>{ const pts = entryRanking(en, rankByPlayer).points; return `<div class="list-row"><span class="seed-badge">${en.seed||'-'}</span><span class="grow main-txt">${esc(entryName(en))}${pts?` <span class="sub-txt" title="Ranking points">&middot; ${pts} pts</span>`:''}</span>
+    ${entries.length ? entries.slice().sort((a,b)=>(validSeed(a.seed)??1e9)-(validSeed(b.seed)??1e9)).map(en=>{ const pts = entryRanking(en, rankByPlayer).points; return `<div class="list-row"><span class="seed-badge">${en.seed||'-'}</span><span class="grow main-txt">${esc(entryName(en))}${pts?` <span class="sub-txt" title="${en.player2Id?'Average ranking points of the pair':'Ranking points'}">&middot; ${fmtPts(pts)} pts${en.player2Id?' avg':''}</span>`:''}</span>
       <input type="number" min="1" class="mono" style="width:56px;border:1px solid var(--border);border-radius:8px;padding:4px;background:var(--bg);color:var(--ink)" data-seed-input="${en.id}" value="${en.seed==null?'':en.seed}" placeholder="seed">
     </div>`; }).join('') : `<div class="empty-tab">Build entries from confirmed registrations first.</div>`}
   `;
