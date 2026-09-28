@@ -219,6 +219,26 @@
   .pill.live{ background:var(--gold-soft); color:var(--gold); animation:pulse 1.6s ease-in-out infinite; }
   @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.55} }
 
+  /* Sponsors: running text under the tabs on the live link */
+  .sponsor-ticker{ display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:11px; padding:7px 12px; margin:-6px 0 16px; overflow:hidden; }
+  .st-label{ flex:none; font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--court); }
+  .st-viewport{ flex:1; min-width:0; overflow:hidden; -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 24px,#000 calc(100% - 24px),transparent 100%); mask-image:linear-gradient(90deg,transparent 0,#000 24px,#000 calc(100% - 24px),transparent 100%); }
+  .st-track{ display:flex; width:max-content; animation:st-scroll var(--st-dur,20s) linear infinite; }
+  .st-run{ display:flex; align-items:center; flex:none; white-space:nowrap; font-size:13px; font-weight:700; color:var(--ink); }
+  .st-run span{ padding:0 14px; }
+  .st-run i{ font-style:normal; color:var(--accent2); }
+  .sponsor-ticker:hover .st-track{ animation-play-state:paused; }
+  @keyframes st-scroll{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce){
+    .st-viewport{ -webkit-mask-image:none; mask-image:none; }
+    .st-track{ animation:none; width:auto; }
+    .st-run{ flex:1 1 auto; min-width:0; white-space:normal; flex-wrap:wrap; row-gap:4px; }
+    .st-run > i:last-child{ display:none; }
+    .st-run[aria-hidden="true"]{ display:none; }
+  }
+  .filter-bar .btn-clear-filters{ color:var(--muted); }
+  .filter-bar .btn-clear-filters svg{ width:13px; height:13px; }
+
   .cat-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
   .cat-card{ border:1px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; background:var(--surface); position:relative; transition:border-color .12s; }
   .cat-card:hover{ border-color:var(--court); }
@@ -921,6 +941,7 @@ const ICONS = {
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
   filter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>',
@@ -1131,7 +1152,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260927.210918';
+const APP_BUILD = '20260928.044418';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3275,7 +3296,7 @@ async function createTournament(data){
   return act(async ()=>{
     const id = await Store.add('tournaments', {
       name:data.name, description:data.description||'', logoUrl:data.logoUrl||'',
-      organizer:data.organizer||'', venue:data.venue||'', address:data.address||'',
+      organizer:data.organizer||'', venue:data.venue||'', address:data.address||'', sponsors:data.sponsors||'',
       startDate:data.startDate||'', endDate:data.endDate||data.startDate||'',
       regOpenDate:data.regOpenDate||'', regCloseDate:data.regCloseDate||'',
       status:data.status||'draft', maxParticipants:data.maxParticipants||0, entryFee:data.entryFee||0,
@@ -4448,6 +4469,7 @@ function renderTournamentDetail(){
     </div>
     ${VIEWER ? renderFollowBar() : ''}
     <div class="tabs">${tabs.map(([k,label])=>`<button class="tab ${topTab===k?'active':''}" data-tab="${k}">${esc(label)}</button>`).join('')}</div>
+    ${VIEWER ? renderSponsorTicker(t) : ''}
     <div id="tabBody">${inSetup ? renderSetupTabs() : ''}${renderTabBody(t)}</div>
   `;
 }
@@ -4857,6 +4879,12 @@ function applyMatchFilters(matches, f){
     return true;
   });
 }
+/* "Clear filters" for a filter bar: shown only while one of its filters is set. */
+function clearFiltersBtn(key, fields){
+  const f = state.filters[key]||{};
+  if(!fields.some(k=>f[k]!=null && f[k]!=='')) return '';
+  return `<button type="button" class="btn btn-sm btn-clear-filters" data-clear-filters="${key}:${fields.join(',')}" title="Clear filters">${ICONS.x} Clear filters</button>`;
+}
 function renderFilterBar(t, key, opts){
   opts = opts||{};
   const f = state.filters[key] = state.filters[key]||{};
@@ -4871,6 +4899,7 @@ function renderFilterBar(t, key, opts){
     ${opts.date!==false?`<div class="date-field m-adv" style="width:150px"><input type="text" class="date-input" data-filter="${key}.date" data-datepicker readonly value="${esc(f.date||'')}" placeholder="Any date" autocomplete="off">${ICONS.calendar.replace('<svg ', '<svg class="date-ic" ')}</div>`:''}
     <input type="text" data-filter="${key}.player" placeholder="Player name" value="${esc(f.player||'')}" style="width:130px">
     <button type="button" class="btn btn-sm mobile-only ${open?'btn-primary':''}" data-filter-toggle="${key}" aria-expanded="${open?'true':'false'}">${ICONS.filter} Filters${adv?`<span class="filter-count">${adv}</span>`:''}</button>
+    ${clearFiltersBtn(key, ['eventId','courtId','status','date','player'])}
     ${opts.more ? opts.more : ''}
   </div>`;
 }
@@ -5183,11 +5212,27 @@ function viewerDefaultTab(t){
   const l = viewerMatchLists(t);
   return (l.live.length || l.upcoming.length) ? 'live' : 'completed';
 }
+/* Sponsors are typed as one text: split on commas or new lines. */
+function sponsorList(t){
+  return String((t&&t.sponsors)||'').split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
+}
+/* Running sponsor text under the tabs on the live link. The track holds the
+   list twice and slides by half its width, so the loop is seamless. The phase
+   comes from the clock, so re-rendering (live updates) doesn't restart it. */
+function renderSponsorTicker(t){
+  const list = sponsorList(t);
+  if(!list.length) return '';
+  const run = list.map(x=>`<span>${esc(x)}</span>`).join('<i aria-hidden="true">&bull;</i>') + '<i aria-hidden="true">&bull;</i>';
+  const dur = Math.max(12, Math.round(list.join('   ').length * 0.35));
+  const delay = -((Date.now()/1000) % dur);
+  return `<div class="sponsor-ticker" role="region" aria-label="Sponsors"><span class="st-label">Sponsors</span>
+    <div class="st-viewport"><div class="st-track" style="--st-dur:${dur}s;animation-delay:${delay.toFixed(2)}s"><div class="st-run">${run}</div><div class="st-run" aria-hidden="true">${run}</div></div></div></div>`;
+}
 function viewerEventFilter(t){
   const evs = tEvents(t.id).filter(e=>eventDraw(e.id));
   if(evs.length<2) return '';
   const f = state.filters.vw = state.filters.vw||{};
-  return `<div class="filter-bar"><select data-filter="vw.eventId" aria-label="Event"><option value="">All events</option>${evs.map(e=>`<option value="${e.id}" ${f.eventId===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}</select></div>`;
+  return `<div class="filter-bar"><select data-filter="vw.eventId" aria-label="Event"><option value="">All events</option>${evs.map(e=>`<option value="${e.id}" ${f.eventId===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}</select>${clearFiltersBtn('vw', ['eventId'])}</div>`;
 }
 /* A two-line scoreboard row: event and round on top, one line per side with game scores. */
 function renderViewerMatch(m, hideTime){ return renderScoreboard(m, {hideTime}); }
@@ -5331,6 +5376,7 @@ function renderPlayersRegistry(){
     <div class="filter-bar">
       <input type="text" placeholder="Search players" data-filter="players.q" value="${esc(f.q||'')}">
       <select data-filter="players.clubId"><option value="">All clubs</option>${state.clubs.map(c=>`<option value="${c.id}" ${f.clubId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+      ${clearFiltersBtn('players', ['q','clubId'])}
       ${state.role==='admin'?`<button class="btn btn-sm" id="btnNewClub">${ICONS.plus} Add club</button>`:''}
     </div>
     ${renderPlayerCardsAdmin(list)}
@@ -5361,6 +5407,7 @@ function renderRankingsView(){
     <div class="filter-bar">
       <select data-filter="rankings.gender"><option value="">All genders</option><option value="male" ${f.gender==='male'?'selected':''}>Male</option><option value="female" ${f.gender==='female'?'selected':''}>Female</option>${allRanked.some(s=>normGender((s.player||{}).gender)==='unspecified')?`<option value="unspecified" ${f.gender==='unspecified'?'selected':''}>Not set</option>`:''}</select>
       <select data-filter="rankings.clubId"><option value="">All clubs</option>${state.clubs.map(c=>`<option value="${c.id}" ${f.clubId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+      ${clearFiltersBtn('rankings', ['gender','clubId'])}
     </div>
     ${(()=>{ const n = allRanked.filter(s=>normGender((s.player||{}).gender)==='unspecified').length;
       return n && f.gender && f.gender!=='unspecified' ? `<div class="helptext" style="margin:-4px 0 10px">${n} ranked player${n===1?' has':'s have'} no gender set, so ${n===1?'is':'are'} left out here. Pick "Not set" to see ${n===1?'them':'them'}, and set it from Players.</div>` : ''; })()}
@@ -5867,6 +5914,8 @@ function openTournamentDialog(existing){
     </div>
     <div class="field"><label>Venue</label><input id="fTVenue" value="${esc(t.venue||'')}" placeholder="Riverside Sports Hall"></div>
     <div class="field"><label>Organizer</label><input id="fTOrganizer" value="${esc(t.organizer||'')}"></div>
+    <div class="field"><label>Sponsors <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="fTSponsors" rows="2" maxlength="600" placeholder="Yonex, City Sports Shop, Riverside Café">${esc(t.sponsors||'')}</textarea>
+      <div class="helptext">Separate sponsors with commas or new lines. They scroll along under the tabs on the tournament's live link.</div></div>
     <div class="field-row">
       <div class="field"><label>Courts</label><input type="number" id="fTCourts" value="${t.numCourts||4}"></div>
       <div class="field"><label>Entry fee</label><input type="number" id="fTFee" value="${t.entryFee||0}"></div>
@@ -5890,6 +5939,7 @@ function openTournamentDialog(existing){
       name, description:document.getElementById('fTDesc').value.trim(),
       startDate:document.getElementById('fTStart').value, endDate:document.getElementById('fTEnd').value,
       venue:document.getElementById('fTVenue').value.trim(), organizer:document.getElementById('fTOrganizer').value.trim(),
+      sponsors:sponsorList({sponsors:document.getElementById('fTSponsors').value}).join(', '),
       numCourts: parseInt(document.getElementById('fTCourts').value,10)||4, entryFee: parseFloat(document.getElementById('fTFee').value)||0,
       status: document.getElementById('fTStatus').value
     };
@@ -6681,6 +6731,7 @@ document.addEventListener('click', async (e)=>{
     ['data-add-am-rounds', v=>{ const ev=eventById(v); if(ev) openAddAmericanoRoundsDialog(ev); }],
     ['data-points-help', ()=>openPointsHelp()],
     ['data-goto-results', ()=>{ state.tab='matches'; state.filters.matches={}; render(); requestAnimationFrame(()=>{ const h=[...document.querySelectorAll('.mt-sec > h3')].find(x=>/Completed/.test(x.textContent)); if(h) h.scrollIntoView({block:'start'}); }); }],
+    ['data-clear-filters', v=>{ const [key, fields] = v.split(':'); const f = state.filters[key] = state.filters[key]||{}; (fields||'').split(',').forEach(k=>{ f[k]=null; }); render(); }],
     ['data-filter-toggle', v=>{ state.mFilterOpen = state.mFilterOpen||{}; state.mFilterOpen[v] = !state.mFilterOpen[v]; render(); }],
     ['data-ev-sub', v=>{ state.eventSub = v; state.eventSubFor = state.eventId; render(); }],
     ['data-start-match', async v=>{ const m=matchById(v); if(m){ await startMatch(m); render(); } }],
