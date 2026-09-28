@@ -1153,7 +1153,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260928.171121';
+const APP_BUILD = '20260928.173803';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -5132,7 +5132,7 @@ function renderMatchesTab(t){
     </div>
     </div>
     ${ev && ev.drawFormat==='americano' && eventDraw(ev.id) ? `<div class="helptext" style="margin:-4px 0 10px">Standings and the final for ${esc(ev.name)} are under Results and Settings &rarr; Draws.</div>`:''}
-    ${!all.length ? `<div class="empty-tab">${ev && !eventDraw(ev.id) ? `No draw for ${esc(ev.name)} yet. Generate it under Settings &rarr; Draws.` : 'No matches match these filters.'}</div>` : ''}
+    ${!all.length ? `<div class="empty-tab">${ev && !eventDraw(ev.id) ? `No draw for ${esc(ev.name)} yet.${state.role==='admin' && !tLocked(t) ? ` <button type="button" class="btn btn-sm btn-primary" data-goto-draws="${ev.id}" style="margin-left:6px">${ICONS.sparkles} Generate the draw</button>` : ''}` : 'No matches match these filters.'}</div>` : ''}
     ${live.length ? section('<span class="sb-live">&#9679;</span> On court now', live.length, grid(live)) : ''}
     ${sched.length ? section('Schedule', sched.length, byTime.map(g=>`<div class="vm-time">${esc(g.k)}</div>${grid(g.ms)}`).join('')) : ''}
     ${unsched.length ? section('Not scheduled yet', unsched.length, grid(unsched)) : ''}
@@ -6732,6 +6732,7 @@ function handleFilterInput(el){
   state.filters[key] = state.filters[key]||{};
   let val = el.type==='checkbox' ? el.checked : el.value;
   state.filters[key][field] = (val===''||val==null) ? null : val;
+  if(raw==='matches.eventId' && state.filters[key][field]) state.filters.drawEventId = state.filters[key][field];   // Settings -> Draws follows
   rerenderPreservingFocus(el);
 }
 
@@ -6783,6 +6784,10 @@ document.addEventListener('click', async (e)=>{
       } else {
         await generateDraw({...ev, drawFormat:format, thirdPlaceMatch:thirdPlace}, {groupSize});
       }
+      /* The Matches tab may still be filtered to the event the organiser came
+         from; show the event whose draw was just made instead ("All events" stays). */
+      const mf = state.filters.matches;
+      if(mf && mf.eventId && mf.eventId!==ev.id) mf.eventId = ev.id;
       render(); return;
     }
     case 'btnGenKnockout': { const ev=eventById(state.eventId); if(ev) await generateKnockoutFromGroups(ev); render(); return; }
@@ -6943,7 +6948,8 @@ document.addEventListener('click', async (e)=>{
     ['data-select-tournament', v=>openTournament(v)],
     ['data-nav', v=>goto(v)],
     ['data-tab', v=>{ state.tab=v; state.eventId=null; render(); window.scrollTo(0,0); }],
-    ['data-open-event', v=>{ state.eventId=null; state.tab='matches'; state.filters.matches = {eventId:v}; render(); window.scrollTo(0,0); }],
+    ['data-open-event', v=>{ state.eventId=null; state.tab='matches'; state.filters.matches = {eventId:v}; state.filters.drawEventId = v; render(); window.scrollTo(0,0); }],
+    ['data-goto-draws', v=>{ state.filters.drawEventId = v; state.eventId = v; state.tab='draws'; render(); window.scrollTo(0,0); }],
     ['data-back-events', ()=>{ state.eventId=null; render(); window.scrollTo(0,0); }],
     ['data-delete-event', async v=>{ if(await confirmDialog('Delete this event and all its data?')) await deleteEventCascade(v); }],
     ['data-open-live', v=>{ const m=matchById(v); if(m) openScoreDialog(m); }],
