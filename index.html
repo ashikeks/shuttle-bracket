@@ -1153,7 +1153,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260928.183457';
+const APP_BUILD = '20260929.042901';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3396,6 +3396,30 @@ function syncMixedPartnerOptions(ev, playerGender, partnerSel){
   if(partnerSel.selectedIndex>0 && partnerSel.options[partnerSel.selectedIndex].disabled) partnerSel.value = '';
 }
 function genderOfPlayerId(id){ const p = id && playerById(id); return p ? p.gender : null; }
+/* Duplicate check for players: names match ignoring case, accents and extra
+   spaces ("José  Diaz" = "jose diaz"). Two people can share a name, so this
+   warns and asks rather than refusing. */
+function normPlayerName(n){ return String(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function playersNamed(name, excludeId){
+  const k = normPlayerName(name);
+  return k ? state.players.filter(p=>p.id!==excludeId && normPlayerName(p.name)===k) : [];
+}
+function describePlayer(p){
+  const club = p.clubId && (state.clubs.find(c=>c.id===p.clubId)||{}).name;
+  const g = normGender(p.gender);
+  return [p.name, club || 'no club', g==='unspecified' ? 'gender not set' : g].join(' · ');
+}
+function duplicatePlayerNote(name, excludeId){
+  const d = playersNamed(name, excludeId);
+  return d.length ? `${ICONS.warn.replace('<svg ','<svg width="13" height="13" style="vertical-align:-2px" aria-hidden="true" ')} Already in Players: ${d.map(p=>esc(describePlayer(p))).join('; ')}` : '';
+}
+/* Ask before saving a name another player already has. True = go ahead. */
+async function confirmDuplicatePlayer(name, excludeId){
+  const d = playersNamed(name, excludeId);
+  if(!d.length) return true;
+  return confirmDialog('There is already '+(d.length===1?'a player':d.length+' players')+' called "'+name.trim()+'": '+d.map(describePlayer).join('; ')+'. Players are shared by all tournaments, so you usually only add each person once. Save a second player with the same name anyway?',
+    {title:'Possible duplicate player', okLabel:'Save anyway', danger:false});
+}
 async function createPlayer(data){
   return act(async ()=> Store.add('players', {
     name:data.name, photoUrl:data.photoUrl||'', dob:data.dob||'', gender:data.gender||'unspecified',
@@ -5695,7 +5719,7 @@ const GUIDE = [
   {id:'players', title:'2 · Add players', steps:[
     'Tap <b>Players</b> in the bottom bar, then <b>+ Add player</b>. Enter the name and choose <b>Male</b> or <b>Female</b> (rankings and mixed events use it).',
     'Or add them from inside a tournament: <b>Settings → Players</b> → <b>New player profile</b>, which can register the player into an event at the same time.',
-    'Players are shared by all your tournaments, so you only add each person once.'
+    'Players are shared by all your tournaments, so you only add each person once. If you type a name that is already in Players (ignoring capitals, accents and spaces), the app shows who it is and asks before saving a second player with that name.'
   ]},
   {id:'events', title:'3 · Create events', steps:[
     'Open the tournament → <b>Events</b> → <b>+ Add event</b>.',
@@ -6332,7 +6356,8 @@ function openPlayerDialog(existing, tournamentId){
   const evs = (!existing && tournamentId) ? tEvents(tournamentId).filter(e=>!evLocked(e)) : [];
   const allPlayersSorted = state.players.slice().sort((a,b)=>a.name.localeCompare(b.name));
   const body = `
-    <div class="field"><label>Name</label><input id="fPName" value="${esc(p.name||'')}" placeholder="Aiko Tanaka"></div>
+    <div class="field"><label>Name</label><input id="fPName" value="${esc(p.name||'')}" placeholder="Aiko Tanaka" autocomplete="off">
+      <div class="helptext" id="fPNameDup" style="color:var(--gold);margin-top:4px" ${duplicatePlayerNote(p.name, p.id)?'':'hidden'}>${duplicatePlayerNote(p.name, p.id)}</div></div>
     <div class="field-row">
       <div class="field"><label>Gender</label><select id="fPGender">${existing?'':'<option value="" selected disabled>Choose&hellip;</option>'}${[['male','Male'],['female','Female'],['unspecified','Other / not set']].map(([v,l])=>`<option value="${v}" ${normGender(p.gender)===v && existing?'selected':''}>${l}</option>`).join('')}</select></div>
       <div class="field"><label>Skill level</label><select id="fPSkill">${['beginner','intermediate','advanced'].map(v=>`<option value="${v}" ${p.skillLevel===v?'selected':''}>${v}</option>`).join('')}</select></div>
@@ -6358,8 +6383,10 @@ function openPlayerDialog(existing, tournamentId){
     regEventSel.onchange = syncPartner;
     document.getElementById('fPGender').addEventListener('change', syncPartner);
   }
+  const nameEl = document.getElementById('fPName'), dupEl = document.getElementById('fPNameDup');
+  nameEl.addEventListener('input', ()=>{ const note = duplicatePlayerNote(nameEl.value, p.id); dupEl.innerHTML = note; dupEl.hidden = !note; });
   document.getElementById('btnSavePlayerDlg').onclick = async ()=>{
-    const name = document.getElementById('fPName').value.trim();
+    const name = document.getElementById('fPName').value.trim().replace(/\s+/g,' ');
     if(!name){ toast('Name is required', true); return; }
     if(!document.getElementById('fPGender').value){ toast('Choose a gender - rankings and mixed events use it', true); return; }
     const data = {
@@ -6367,6 +6394,7 @@ function openPlayerDialog(existing, tournamentId){
       clubId: document.getElementById('fPClub').value||null
     };
     if(existing){
+      if(normPlayerName(name)!==normPlayerName(existing.name) && !await confirmDuplicatePlayer(name, existing.id)) return;
       await updatePlayer(existing.id, data);
     } else {
       const eventId = regEventSel ? regEventSel.value : '';
@@ -6376,6 +6404,7 @@ function openPlayerDialog(existing, tournamentId){
         const mixedIssue = mixedGenderProblem({name, gender:data.gender}, playerById(document.getElementById('fPRegPartner').value));
         if(mixedIssue){ toast(mixedIssue, true); return; }
       }
+      if(!await confirmDuplicatePlayer(name)) return;
       const newId = await createPlayer(data);
       if(ev){
         const partnerId = document.getElementById('fPRegPartner').value || null;
@@ -6867,8 +6896,10 @@ document.addEventListener('click', async (e)=>{
     }
     case 'btnSaveProfile': {
       const me = myPlayer(); if(!me) return;
+      const newName = document.getElementById('pfName').value.trim().replace(/\s+/g,' ')||me.name;
+      if(normPlayerName(newName)!==normPlayerName(me.name) && !await confirmDuplicatePlayer(newName, me.id)) return;
       await updatePlayer(me.id, {
-        name: document.getElementById('pfName').value.trim()||me.name,
+        name: newName,
         skillLevel: document.getElementById('pfSkill').value,
         email: document.getElementById('pfEmail').value.trim(),
         phone: document.getElementById('pfPhone').value.trim(),
