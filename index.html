@@ -1153,7 +1153,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260929.131237';
+const APP_BUILD = '20260929.131803';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -5808,7 +5808,7 @@ const GUIDE = [
     'One-time setup: in the app <b>Settings → Live sharing</b>, enter your Supabase project URL, key and viewer page address, then <b>Test connection</b>.',
     'In a tournament, tap the <b>Share</b> button at the top and <b>Create live link</b>. Send the link or QR code to players and spectators.',
     'Viewers see Live and upcoming matches, Completed results and Standings, and can follow one player. It updates by itself.',
-    'The tournament’s sponsors scroll along under the tabs. Upcoming knockout matches show their places (e.g. A1 vs B2) until the group results fill in the names.'
+    'The tournament’s sponsors scroll along under the tabs. A match appears in the upcoming list once both of its players are known.'
   ]}
 ];
 function renderGuideView(){
