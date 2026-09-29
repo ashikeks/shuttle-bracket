@@ -1153,7 +1153,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260929.042901';
+const APP_BUILD = '20260929.131237';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -2631,6 +2631,26 @@ function buildKnockoutPlaceholders(ctx, groups, qualifiersPerGroup, opts){
   if(order.length<2) return [];
   return buildSingleElimination(ctx, order.map(src=>({id:null, src})), opts);
 }
+/* The matches whose winner (or loser) goes into this one. */
+function feedersOf(m){ return state.matches.filter(f=>f.id!==m.id && (f.nextMatchId===m.id || f.loserNextMatchId===m.id)); }
+/* "Quarterfinal 2": the round, numbered when the round has more than one match. */
+function matchNumberLabel(m){
+  const same = state.matches.filter(x=>x.eventId===m.eventId && x.drawId===m.drawId && x.bracket===m.bracket && x.round===m.round && !!x.isThirdPlace===!!m.isThirdPlace)
+    .sort((a,b)=>a.position-b.position);
+  const i = same.findIndex(x=>x.id===m.id);
+  return roundLabelForMatch(m) + (same.length>1 && i>=0 ? ' '+(i+1) : '');
+}
+/* Like matchSideName, but a slot waiting on an earlier match says which one:
+   "Winner of Quarterfinal 1" / "Loser of Semifinal 2". Used in match lists. */
+function matchSideLabel(m, slot){
+  const n = matchSideName(m, slot);
+  if(n!=='TBD') return n;
+  const f = state.matches.find(x=>x.nextMatchId===m.id && x.nextMatchSlot===slot);
+  if(f) return 'Winner of ' + matchNumberLabel(f);
+  const l = state.matches.find(x=>x.loserNextMatchId===m.id && x.loserNextMatchSlot===slot);
+  if(l) return 'Loser of ' + matchNumberLabel(l);
+  return n;
+}
 /* The name shown for one side of a match: the entry, else its placeholder
    ("A1" = winner of Group A), else TBD (waiting for an earlier match). */
 function matchSideName(m, slot){
@@ -2893,6 +2913,13 @@ function restMinutesAfter(match){
 function earliestStartFor(match, excludeId){
   const players = new Set(matchEntryPlayerIds(match));
   let earliest = 0, because = null;
+  // A match waiting on earlier winners starts after those matches (and the rest after them).
+  for(const f of feedersOf(match)){
+    if(f.id===excludeId || DECIDED_STATUSES.includes(f.status)) continue;
+    const w = matchWindow(f); if(!w) continue;
+    const free = w.end + restMinutesAfter(f)*60000;
+    if(free > earliest){ earliest = free; because = f; }
+  }
   for(const m of state.matches){
     if(m.id===match.id || m.id===excludeId || m.tournamentId!==match.tournamentId || m.status==='cancelled') continue;
     if(!matchEntryPlayerIds(m).some(p=>players.has(p))) continue;
@@ -2929,6 +2956,21 @@ function checkSchedulingConflict(tournamentId, matchId, courtId, scheduledStart,
           freeAt: oWin.start < win.start ? oWin.end+restOther : null});
       }
     }
+  }
+  // Order within a bracket: after the undecided matches feeding this one, before the ones it feeds.
+  if(thisMatch.id){
+    for(const f of feedersOf(thisMatch)){
+      if(DECIDED_STATUSES.includes(f.status)) continue;
+      const fWin = matchWindow(f); if(!fWin) continue;
+      const freeAt = fWin.end + restMinutesAfter(f)*60000;
+      if(win.start < freeAt) conflicts.push({type:'order', match:f, feeder:true, freeAt, restMin: restMinutesAfter(f)});
+    }
+    const restThis = restMinutesAfter({...thisMatch, tournamentId})*60000;
+    [thisMatch.nextMatchId, thisMatch.loserNextMatchId].filter(Boolean).forEach(id=>{
+      const d = matchById(id); if(!d || DECIDED_STATUSES.includes(d.status) || d.status==='in_progress') return;
+      const dWin = matchWindow(d); if(!dWin) return;
+      if(dWin.start < win.end + restThis) conflicts.push({type:'order', match:d, feeder:false});
+    });
   }
   return conflicts;
 }
@@ -3767,9 +3809,11 @@ async function deleteCourt(id){ return act(async ()=> Store.remove('courts', id)
 async function assignMatchSchedule(match, courtId, scheduledStart, estDurationMin){
   const conflicts = checkSchedulingConflict(match.tournamentId, match.id, courtId, scheduledStart, estDurationMin);
   if(conflicts.length){
-    const c = conflicts.find(x=>x.type==='court') || conflicts[0];
+    const c = conflicts.find(x=>x.type==='court') || conflicts.find(x=>x.type==='order') || conflicts[0];
     let kind;
     if(c.type==='court') kind = 'That court is already booked at this time.';
+    else if(c.type==='order' && c.feeder) kind = 'This match needs the '+(c.match.loserNextMatchId===match.id?'loser':'winner')+' of '+matchNumberLabel(c.match)+', which is scheduled until '+fmtTime(new Date(matchWindow(c.match).end).toISOString())+' (then '+c.restMin+' min rest). Earliest start: '+fmtTime(new Date(c.freeAt).toISOString())+'.';
+    else if(c.type==='order') kind = matchNumberLabel(c.match)+' at '+fmtTime(c.match.scheduledStart)+' needs the result of this match. Pick an earlier time, or move '+matchNumberLabel(c.match)+' first.';
     else if(c.freeAt) kind = 'A player needs '+c.restMin+' min rest after their match ('+entryName(entryById(c.match.entry1Id))+' vs '+entryName(entryById(c.match.entry2Id))+'). Earliest start: '+fmtTime(new Date(c.freeAt).toISOString())+'.';
     else kind = 'A player has another match too soon after this one ('+c.restMin+' min rest needed).';
     toast('Scheduling conflict: ' + kind, true);
@@ -4065,27 +4109,27 @@ function exportRegistrations(tid){
 function exportSchedule(tid){
   downloadCSV('match-schedule.csv', toCSV(
     [{label:'Event',get:m=>(eventById(m.eventId)||{}).name||''},{label:'Round',get:m=>roundLabelForMatch(m)},
-     {label:'Player/Team A',get:m=>matchSideName(m,1)},{label:'Player/Team B',get:m=>matchSideName(m,2)},
+     {label:'Player/Team A',get:m=>matchSideLabel(m,1)},{label:'Player/Team B',get:m=>matchSideLabel(m,2)},
      {label:'Court',get:m=>(courtById(m.courtId)||{}).name||''},{label:'Start',get:m=>fmtDateTime(m.scheduledStart)},
      {label:'Status',key:'status'}], tMatches(tid)));
 }
 function exportCourtSchedule(tid){
   downloadCSV('court-schedule.csv', toCSV(
     [{label:'Court',get:m=>(courtById(m.courtId)||{}).name||'Unassigned'},{label:'Start',get:m=>fmtDateTime(m.scheduledStart)},
-     {label:'Event',get:m=>(eventById(m.eventId)||{}).name||''},{label:'Match',get:m=>matchSideName(m,1)+' vs '+matchSideName(m,2)},
+     {label:'Event',get:m=>(eventById(m.eventId)||{}).name||''},{label:'Match',get:m=>matchSideLabel(m,1)+' vs '+matchSideLabel(m,2)},
      {label:'Status',key:'status'}], tMatches(tid).filter(m=>m.scheduledStart).sort((a,b)=>a.scheduledStart.localeCompare(b.scheduledStart))));
 }
 function exportDraw(eventId){
   downloadCSV('draw.csv', toCSV(
     [{label:'Bracket',key:'bracket'},{label:'Round',get:m=>roundLabelForMatch(m)},
-     {label:'Player/Team A',get:m=>matchSideName(m,1)},{label:'Player/Team B',get:m=>matchSideName(m,2)},
+     {label:'Player/Team A',get:m=>matchSideLabel(m,1)},{label:'Player/Team B',get:m=>matchSideLabel(m,2)},
      {label:'Winner',get:m=>m.winnerEntryId?entryName(entryById(m.winnerEntryId)):''},{label:'Status',key:'status'}],
     eventMatches(eventId)));
 }
 function exportResults(tid){
   downloadCSV('match-results.csv', toCSV(
     [{label:'Event',get:m=>(eventById(m.eventId)||{}).name||''},{label:'Round',get:m=>roundLabelForMatch(m)},
-     {label:'Team A',get:m=>matchSideName(m,1)},{label:'Team B',get:m=>matchSideName(m,2)},
+     {label:'Team A',get:m=>matchSideLabel(m,1)},{label:'Team B',get:m=>matchSideLabel(m,2)},
      {label:'Score',get:m=>(m.games||[]).map(g=>g.a+'-'+g.b).join(', ')},{label:'Winner',get:m=>m.winnerEntryId?entryName(entryById(m.winnerEntryId)):''},
      {label:'Status',key:'status'}], tMatches(tid).filter(m=>['completed','walkover','retired','bye'].includes(m.status))));
 }
@@ -5130,7 +5174,7 @@ function renderFilterBar(t, key, opts){
 function renderMatchesTab(t){
   // One place for every match: on court now, the schedule (by start time), not yet scheduled, then results.
   const f = state.filters.matches = state.filters.matches||{};
-  const all = applyMatchFilters(tMatches(t.id), f).filter(m=>(m.entry1Id||m.entry2Id||m.src1||m.src2) && m.status!=='bye' && (f.status==='cancelled' || m.status!=='cancelled'));
+  const all = applyMatchFilters(tMatches(t.id), f).filter(m=>(m.entry1Id||m.entry2Id||m.src1||m.src2||feedersOf(m).length) && m.status!=='bye' && (f.status==='cancelled' || m.status!=='cancelled'));
   const DONE = ['completed','walkover','retired'];
   const live = all.filter(m=>m.status==='in_progress');
   const sched = all.filter(m=>m.scheduledStart && !DONE.includes(m.status) && m.status!=='in_progress')
@@ -5185,7 +5229,7 @@ function renderScoreboard(m, opts){
     const won = done && e && m.winnerEntryId===e.id;
     const me = fp && e && entryPlayerIds(e).includes(fp.id);
     return `<div class="sb-line ${won?'win':''} ${me?'me':''} ${!e?'tbd':''}">
-      <span class="sb-nm">${esc(e?entryName(e):matchSideName(m, key==='a'?1:2))}${won?`<span class="sb-tick" aria-label="winner">${ICONS.check}</span>`:''}</span>
+      <span class="sb-nm">${esc(e?entryName(e):matchSideLabel(m, key==='a'?1:2))}${won?`<span class="sb-tick" aria-label="winner">${ICONS.check}</span>`:''}</span>
       <span class="sb-g mono">${games.map((g,i)=>cell(g,i,key)).join('')}</span></div>`;
   };
   const status = live ? `<span class="sb-live">&#9679; LIVE</span>`
@@ -5239,7 +5283,7 @@ function renderScheduleTab(t){
       if(!m) return '<td></td>';
       return `<td><div class="sched-cell-match ${m.status==='in_progress'?'live':''}" data-open-match="${m.id}">
         <div style="font-weight:700">${esc(eventById(m.eventId)?.name||'')}</div>
-        <div>${esc(matchSideName(m,1))} vs ${esc(matchSideName(m,2))}</div>
+        <div>${esc(matchSideLabel(m,1))} vs ${esc(matchSideLabel(m,2))}</div>
         ${matchStatusPill(m)}
       </div></td>`;
     }).join('')}</tr>`).join('')}</tbody></table></div>`}
@@ -5747,7 +5791,7 @@ const GUIDE = [
     'Tap an event on the <b>Events</b> tab to see only that event’s matches; Settings → Draws then opens on the same event. If it has no draw yet, tap <b>Generate the draw</b>.',
     'Filter by event, court, status, date or player. <b>Clear filters</b> appears while any filter is on and resets them all.',
     'Use <b>Schedule a match…</b> or the calendar button on a match to give it a court and time. The duration starts at the tournament’s <b>Match duration</b>, and the app keeps the rest time between a player’s matches.',
-    'Knockout matches waiting for group results (e.g. A1 vs B2) can already be given a court and time; they keep it when the names fill in.',
+    'Later rounds are listed too, before their players are known (e.g. “Winner of Quarterfinal 1”, or A1 vs B2 in groups + knockout). You can already give them a court and time, and they keep it when the names fill in. A match can’t be booked before the matches feeding it end (plus rest), and the app suggests the earliest time.',
     'When players walk on court, tap <b>Start</b>. The match shows as LIVE here and on the live link.',
     'Tap <b>Score</b> (or <b>Update score</b>) to enter the points of each game. A match with a winner is saved as completed; an unfinished score is kept as in progress.',
     'Wrong result? Tap <b>Edit score</b> on a completed match. Use <b>W/O</b> for a walkover or retirement.'
@@ -6467,7 +6511,9 @@ function openScheduleDialog(match){
   else { const step=5*60000; dt = new Date(Math.ceil(Math.max(Date.now(), early.time||0)/step)*step); }
   const dateVal = localDateStr(dt);            // local date (toISOString would give the UTC day)
   const timeVal = localTimeStr(dt);
-  const restNote = early.because
+  const restNote = early.because && feedersOf(match).some(f=>f.id===early.because.id)
+    ? `<div class="helptext">${ICONS.calendar} Starts after ${esc(matchNumberLabel(early.because))} (scheduled until ${esc(fmtTime(new Date(matchWindow(early.because).end).toISOString()))}) plus ${restMinutesAfter(early.because)} min rest: from <b>${esc(fmtDateTime(new Date(early.time).toISOString()))}</b>.</div>`
+    : early.because
     ? `<div class="helptext">${ICONS.calendar} Players are free from <b>${esc(fmtDateTime(new Date(early.time).toISOString()))}</b>: ${restMinutesAfter(early.because)} min rest after their match ${esc(entryName(entryById(early.because.entry1Id)))} vs ${esc(entryName(entryById(early.because.entry2Id)))}.</div>`
     : `<div class="helptext">Rest rule: at least ${MIN_REST_SINGLE} min between one-game matches, ${MIN_REST_MULTI} min after best of 3/5.</div>`;
   const body = `
@@ -6504,9 +6550,10 @@ function scheduleDurationDefault(match, t){
   return setting;
 }
 function openAssignAnyDialog(t){
-  const matches = tMatches(t.id).filter(m=>m.entry1Id && m.entry2Id && !['completed','cancelled','bye'].includes(m.status));
-  if(!matches.length){ toast('No unscheduled matches ready to play', true); return; }
-  const body = `<div class="field"><label>Match</label><select id="fAnyMatch">${matches.map(m=>`<option value="${m.id}">${esc(entryName(entryById(m.entry1Id)))} vs ${esc(entryName(entryById(m.entry2Id)))} (${esc((eventById(m.eventId)||{}).name||'')})</option>`).join('')}</select></div>`;
+  const matches = tMatches(t.id).filter(m=>!['completed','walkover','retired','cancelled','bye','in_progress'].includes(m.status) && (m.entry1Id||m.entry2Id||m.src1||m.src2||feedersOf(m).length))
+    .sort((a,b)=>((a.entry1Id&&a.entry2Id)?0:1)-((b.entry1Id&&b.entry2Id)?0:1) || ((eventById(a.eventId)||{}).name||'').localeCompare((eventById(b.eventId)||{}).name||'') || a.round-b.round || a.position-b.position);
+  if(!matches.length){ toast('No matches left to schedule', true); return; }
+  const body = `<div class="field"><label>Match</label><select id="fAnyMatch">${matches.map(m=>`<option value="${m.id}">${esc(matchSideLabel(m,1))} vs ${esc(matchSideLabel(m,2))} (${esc((eventById(m.eventId)||{}).name||'')} &middot; ${esc(matchNumberLabel(m))})${m.scheduledStart?' &middot; '+esc(fmtDateTime(m.scheduledStart)):''}</option>`).join('')}</select></div>`;
   openDialog('Schedule a match', body, `<button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn btn-primary" id="btnPickMatchNext">Next</button>`);
   document.getElementById('btnPickMatchNext').onclick = ()=>{
     const id = document.getElementById('fAnyMatch').value;
