@@ -1152,7 +1152,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260930.182210';
+const APP_BUILD = '20260930.190935';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3784,6 +3784,7 @@ async function generateDraw(event, opts){
   await buildEntriesFromRegistrations(event);
   const entriesRaw = eventEntries(event.id).length ? eventEntries(event.id) : await Store.getAll('entries', [['eventId', event.id]]);
   if(entriesRaw.length < 2){ toast('Need at least 2 confirmed entries to generate a draw', true); return; }
+  if(!formatAllowedForType(event.drawFormat, event.type||'singles')){ toast('Americano isn’t available for singles events. Pick another format.', true); return; }
   if(event.drawFormat==='americano' && entriesRaw.length < 4){ toast('Americano needs at least 4 confirmed entries', true); return; }
   /* Seeds first (1, 2, 3 ...), then unseeded players in random order. The
      knockout plan puts the first entry at seed 1, spreads seeds apart and
@@ -5011,6 +5012,14 @@ function renderEventEntriesSection(t, ev){
     </div>`; }).join('') : `<div class="empty-tab">Build entries from confirmed registrations first.</div>`}
   `;
 }
+/* Americano rotates partners into doubles, so it isn't offered for singles events
+   (it stays listed only for an old singles event already set to it, so it can be changed). */
+const DRAW_FORMATS = [['single_elimination','Single elimination'],['double_elimination','Double elimination'],['round_robin','Round robin'],['group_knockout','Groups + knockout'],['americano','Americano']];
+function formatAllowedForType(format, type){ return !(format==='americano' && type==='singles'); }
+function drawFormatOptionsHtml(type, selected){
+  return DRAW_FORMATS.filter(([v])=>formatAllowedForType(v, type) || v===selected)
+    .map(([v,l])=>`<option value="${v}" ${selected===v?'selected':''}>${l}</option>`).join('');
+}
 function renderEventDrawCard(t, ev){
   const regs = state.registrations.filter(r=>r.eventId===ev.id);
   const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam);
@@ -5019,7 +5028,7 @@ function renderEventDrawCard(t, ev){
     <div class="card">
       <div class="field-row">
         <div class="field"><label>Format</label><select id="fDrawFormat" data-event-id="${ev.id}">
-          ${[['single_elimination','Single elimination'],['double_elimination','Double elimination'],['round_robin','Round robin'],['group_knockout','Groups + knockout'],['americano','Americano']].map(([v,l])=>`<option value="${v}" ${ev.drawFormat===v?'selected':''}>${l}</option>`).join('')}
+          ${drawFormatOptionsHtml(ev.type||'singles', ev.drawFormat)}
         </select></div>
         <div class="field" id="fGroupSizeWrap" ${ev.drawFormat!=='group_knockout'?'hidden':''}><label>Group size</label><input type="number" id="fGroupSize" min="3" max="6" value="${(draw&&draw.groupSize)||4}"></div>
       </div>
@@ -6409,7 +6418,7 @@ function openEventDialog(tid, existing){
       ${['none','junior','senior','beginner','intermediate','advanced','custom'].map(v=>`<option value="${v}" ${ev.ageGroup===v?'selected':''}>${v}</option>`).join('')}
     </select></div>
     <div class="field"><label>Default draw format</label><select id="fEFormat">
-      ${[['single_elimination','Single elimination'],['double_elimination','Double elimination'],['round_robin','Round robin'],['group_knockout','Groups + knockout'],['americano','Americano']].map(([v,l])=>`<option value="${v}" ${ev.drawFormat===v?'selected':''}>${l}</option>`).join('')}
+      ${drawFormatOptionsHtml(ev.type||'singles', ev.drawFormat)}
     </select></div>
     <label class="row" style="font-size:12.5px;gap:6px"><input type="checkbox" id="fEThird" ${ev.thirdPlaceMatch?'checked':''}> Third place match</label>
     <div class="card" id="fEAmericanoCard" style="margin-top:12px;padding:12px" ${isAM?'':'hidden'}>
@@ -6489,6 +6498,12 @@ function openEventDialog(tid, existing){
     amCard.hidden = !isNowAM; scoringCard.hidden = isNowAM;
     document.getElementById('fEKOWrap').hidden = formatEl.value!=='group_knockout';
   });
+  document.getElementById('fEType').addEventListener('change', ()=>{
+    const type = document.getElementById('fEType').value;
+    const cur = formatAllowedForType(formatEl.value, type) ? formatEl.value : 'single_elimination';
+    formatEl.innerHTML = drawFormatOptionsHtml(type, cur);
+    formatEl.dispatchEvent(new Event('change'));
+  });
   document.getElementById('fEUseKO').addEventListener('change', e=>{ document.getElementById('fEKOFields').hidden = !e.target.checked; });
   const useCustomEl = document.getElementById('fEUseCustomScoring');
   const customFieldsEl = document.getElementById('fECustomScoringFields');
@@ -6497,6 +6512,7 @@ function openEventDialog(tid, existing){
     const name = document.getElementById('fEName').value.trim();
     if(!name){ toast('Name is required', true); return; }
     const format = document.getElementById('fEFormat').value;
+    if(!formatAllowedForType(format, document.getElementById('fEType').value)){ toast('Americano isn’t available for singles events. Pick another format.', true); return; }
     const useCustom = format!=='americano' && document.getElementById('fEUseCustomScoring').checked;
     const data = {
       name, type:document.getElementById('fEType').value, ageGroup:document.getElementById('fEAge').value,
