@@ -1153,7 +1153,7 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260929.131803';
+const APP_BUILD = '20260930.172332';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -1188,6 +1188,13 @@ const Store = (function(){
     if(raw) local=JSON.parse(raw)||{};
   }catch(e){}
   const localListeners = {};
+  /* For merging with other devices (iCloud sync): every record written here
+     carries _mt (last change, ms), and deletions are remembered in
+     local[DEL_KEY][col][id] = time, so a record deleted on one device isn't
+     brought back by another. DEL_KEY is not a collection. */
+  const DEL_KEY = '__deleted';
+  const TOMBSTONE_KEEP_MS = 180*864e5;
+  function tomb(col){ local[DEL_KEY] = local[DEL_KEY]||{}; return (local[DEL_KEY][col] = local[DEL_KEY][col]||{}); }
 
   function ensureCol(col){ if(!local[col]) local[col]={}; if(!localListeners[col]) localListeners[col]=new Set(); }
   let nativeSaveTimer = null;
@@ -1259,7 +1266,9 @@ const Store = (function(){
       await db.collection(col).doc(docId).set(body);
     } else {
       ensureCol(col);
-      local[col][docId] = body; saveLocal(); emitLocal(col);
+      local[col][docId] = {...body, _mt: Date.now()};
+      if(local[DEL_KEY] && local[DEL_KEY][col]) delete local[DEL_KEY][col][docId];
+      saveLocal(); emitLocal(col);
     }
     return docId;
   }
@@ -1270,7 +1279,7 @@ const Store = (function(){
     } else {
       ensureCol(col);
       if(!local[col][id]) return;
-      local[col][id] = {...local[col][id], ...data}; saveLocal(); emitLocal(col);
+      local[col][id] = {...local[col][id], ...data, _mt: Date.now()}; saveLocal(); emitLocal(col);
     }
   }
   async function remove(col, id){
@@ -1279,11 +1288,53 @@ const Store = (function(){
       await db.collection(col).doc(id).delete();
     } else {
       ensureCol(col);
-      delete local[col][id]; saveLocal(); emitLocal(col);
+      delete local[col][id]; tomb(col)[id] = Date.now(); saveLocal(); emitLocal(col);
     }
   }
 
-  return {init, subscribe, add, update, remove, getAll, mode:()=>mode};
+  /* Merge a database from another device (iCloud) into this one, record by
+     record: the newer change wins (_mt; older records fall back to
+     updatedAt/createdAt), and a deletion wins over any change made before it.
+     Returns {changed} - whether anything on this device changed. The merged
+     result is saved (and so written back to iCloud) whenever it differs from
+     the incoming copy, so both sides end up the same. */
+  function recTime(r){ return r ? (r._mt || Date.parse(r.updatedAt||'') || Date.parse(r.createdAt||'') || 0) : 0; }
+  function mergeRemote(remote){
+    if(mode!=='local' || VIEWER || !remote || typeof remote!=='object') return {changed:false};
+    const isCol = k => k!==DEL_KEY && ((local[k] && typeof local[k]==='object') || (remote[k] && typeof remote[k]==='object'));
+    const del = {};
+    [local[DEL_KEY]||{}, remote[DEL_KEY]||{}].forEach(src=>Object.entries(src).forEach(([c,ids])=>{
+      del[c] = del[c]||{};
+      Object.entries(ids||{}).forEach(([id,ts])=>{ if(!(del[c][id] >= ts)) del[c][id] = ts; });
+    }));
+    const out = {}, changedCols = new Set();
+    new Set([...Object.keys(local), ...Object.keys(remote)].filter(isCol)).forEach(c=>{
+      const L = local[c]||{}, R = remote[c]||{}, res = {};
+      new Set([...Object.keys(L), ...Object.keys(R)]).forEach(id=>{
+        const l = L[id], r = R[id];
+        let pick = !l ? r : !r ? l : (recTime(r) > recTime(l) ? r : l);
+        const dts = del[c] && del[c][id];
+        if(dts && dts >= recTime(pick)) pick = null;           // deleted after its last change
+        else if(dts) delete del[c][id];                         // changed again after the deletion: keep it
+        if(pick) res[id] = pick;
+        if(JSON.stringify(pick||null) !== JSON.stringify(l||null)) changedCols.add(c);
+      });
+      out[c] = res;
+    });
+    const cutoff = Date.now() - TOMBSTONE_KEEP_MS;
+    Object.values(del).forEach(ids=>Object.keys(ids).forEach(id=>{ if(ids[id] < cutoff) delete ids[id]; }));
+    out[DEL_KEY] = del;
+    const differsFromRemote = JSON.stringify(out) !== JSON.stringify(remote);
+    local = out;
+    if(changedCols.size || differsFromRemote){
+      try{ localStorage.setItem(LOCAL_KEY, JSON.stringify(local)); }catch(e){}
+      if(Native.has('sbStore')){ clearTimeout(nativeSaveTimer); flushNative(); }
+    }
+    changedCols.forEach(c=>{ if(localListeners[c]) emitLocal(c); });
+    return {changed: changedCols.size>0};
+  }
+
+  return {init, subscribe, add, update, remove, getAll, mergeRemote, mode:()=>mode};
 })();
 
 /* Wrap every write in try/catch so a db failure (offline, quota, revoked
@@ -1299,6 +1350,66 @@ async function act(fn, okMsg){
   }
 }
 
+
+/* ============================== iCLOUD SYNC (iPhone app) ============================== */
+/* The app keeps the database on the device (Application Support). With iCloud
+   sync on, the native side (CloudSync.swift) also keeps a copy in the app's
+   iCloud container and hands us the copy another device saved; we merge it
+   record by record (Store.mergeRemote). Bridge: sbCloud {action} -> reply
+   {enabled, available, lastSync, json}. Only present inside the app. */
+const CloudUI = (function(){
+  let info = {enabled:false, available:false, lastSync:'', known:false};
+  let lastCheck = 0, busy = false;
+  const has = ()=> Native.has('sbCloud');
+  async function call(action){
+    if(!has()) return info;
+    lastCheck = Date.now();
+    try{
+      const r = await window.webkit.messageHandlers.sbCloud.postMessage({action});
+      if(r && typeof r==='object'){ info = {enabled:!!r.enabled, available:!!r.available, lastSync:r.lastSync||'', known:true}; if(r.json) apply(r.json, action==='pull'); }
+    }catch(e){ console.error('iCloud bridge', e); }
+    redraw();
+    return info;
+  }
+  function apply(json, quiet){
+    let remote; try{ remote = JSON.parse(json); }catch(e){ return; }
+    const res = Store.mergeRemote(remote);
+    if(res.changed){ if(!quiet) toast('Updated from iCloud'); render(); }
+  }
+  function redraw(){ const el = document.getElementById('cloudSettingsCard'); if(el) el.outerHTML = card(); }
+  function card(){
+    if(!has()) return '';
+    // Opening Settings re-checks iCloud now and then (e.g. after signing in).
+    if(!busy && Date.now()-lastCheck > 15000){ busy = true; setTimeout(()=>call('status').finally(()=>{ busy = false; }), 0); }
+    const i = info;
+    const when = i.lastSync ? new Date(i.lastSync) : null;
+    const status = !i.known ? 'Checking iCloud&hellip;'
+      : !i.available ? `${ICONS.warn.replace('<svg ','<svg width="13" height="13" style="vertical-align:-2px" aria-hidden="true" ')} iCloud isn't available. Sign in to iCloud in the iPhone's Settings app. If you are signed in, this build of the app doesn't have iCloud switched on yet (it needs the paid Apple Developer Program; see the README).`
+      : i.enabled ? `On. ${when && !isNaN(when) ? 'Last synced '+esc(fmtDateTime(when.toISOString()))+'.' : 'Waiting for the first sync.'}`
+      : 'Off. Your data stays on this device only.';
+    return `<div class="card" id="cloudSettingsCard">
+      <h3 style="font-family:'Public Sans';font-size:14px;text-transform:none;letter-spacing:0;margin-bottom:6px">iCloud sync</h3>
+      <p class="helptext" style="margin:0 0 10px">Keep your tournaments, players and results in your iCloud so you can carry on from your other iPhone or iPad signed in to the same Apple ID. Turn it on on each device. Changes made on two devices are combined; if the same item was changed on both, the latest change wins.</p>
+      <p class="helptext" style="margin:0 0 10px">${status}</p>
+      <div class="row wrap" style="gap:8px">
+        ${i.enabled
+          ? `<button class="btn btn-sm" id="btnCloudSyncNow" ${i.available?'':'disabled'}>${ICONS.refresh} Sync now</button><button class="btn btn-sm" id="btnCloudOff">Turn off</button>`
+          : `<button class="btn btn-sm btn-primary" id="btnCloudOn" ${i.available?'':'disabled'}>Turn on iCloud sync</button>`}
+      </div>
+    </div>`;
+  }
+  async function turnOn(){
+    if(!await confirmDialog('Your tournaments on this device will be combined with any already in iCloud from your other devices, and kept in step from now on.', {title:'Turn on iCloud sync?', okLabel:'Turn on', danger:false})) return;
+    await call('enable'); await call('pull'); toast('iCloud sync is on');
+  }
+  async function turnOff(){
+    if(!await confirmDialog('This device stops syncing. Its data stays here, and the copy in iCloud stays for your other devices.', {title:'Turn off iCloud sync?', okLabel:'Turn off', danger:false})) return;
+    await call('disable'); toast('iCloud sync is off');
+  }
+  // Changes saved on another device arrive here while the app is open.
+  window.__sbCloudIncoming = json => { apply(json, false); call('status'); };
+  return {start: ()=> has() && call('pull'), card, status: ()=>call('status'), syncNow: async ()=>{ await call('pull'); toast('Synced with iCloud'); }, turnOn, turnOff};
+})();
 
 /* ============================== LIVE SHARE LINKS ============================== */
 /* A shared tournament is a read-only copy kept in the organiser's own Supabase
@@ -5809,6 +5920,12 @@ const GUIDE = [
     'In a tournament, tap the <b>Share</b> button at the top and <b>Create live link</b>. Send the link or QR code to players and spectators.',
     'Viewers see Live and upcoming matches, Completed results and Standings, and can follow one player. It updates by itself.',
     'The tournament’s sponsors scroll along under the tabs. A match appears in the upcoming list once both of its players are known.'
+  ]},
+  {id:'icloud', title:'9 · Use on more than one device (iPhone and iPad app)', steps:[
+    'In the app, open <b>Settings → iCloud sync</b> and tap <b>Turn on</b>. Do the same on each iPhone or iPad signed in to the same Apple Account.',
+    'Each device keeps its own copy and works offline. Changes reach the other devices within a few seconds of being online; <b>Sync now</b> fetches them straight away.',
+    'Changes are combined record by record, so work done on two devices is kept. If the same record was changed on both, the later change wins. Deleted items stay deleted.',
+    'If the card says iCloud isn’t available, sign in to iCloud in the iPhone Settings. Turning sync off keeps everything on this device.'
   ]}
 ];
 function renderGuideView(){
@@ -5825,6 +5942,7 @@ function renderSettingsView(){
   return `<div class="t-header page-h"><div><h2>Settings</h2><div class="t-sub">App settings</div></div></div>
     <button class="guide-link" data-nav="guide"><span class="more-ic">${ICONS.info}</span><span class="grow"><b>User guide</b><small>How to set up a tournament, events and matches, step by step</small></span>${ICONS.chevRight}</button>
     ${renderShareSettingsCard()}
+    ${CloudUI.card()}
     ${renderDataSettingsCard()}
     <div class="helptext" style="text-align:center;margin:10px 0">A tournament's scoring, courts and rest times are under that tournament &rarr; Settings &rarr; General.</div>`;
 }
@@ -6845,6 +6963,9 @@ document.addEventListener('click', async (e)=>{
     case 'btnRole': state.roleMenuOpen=!state.roleMenuOpen; state.notifOpen=false; state.searchOpen=false; render(); return;
     case 'btnNewTournament': case 'btnNewTournamentHero': openTournamentDialog(); return;
     case 'btnLoadDemo': await seedDemoData(); if(state.tournaments.length) goto('dashboard'); return;
+    case 'btnCloudOn': CloudUI.turnOn(); return;
+    case 'btnCloudOff': CloudUI.turnOff(); return;
+    case 'btnCloudSyncNow': CloudUI.syncNow(); return;
     case 'btnResetAllData':
       if(await confirmDialog('Delete ALL tournaments, players, clubs, events, draws and results? This cannot be undone.', {okLabel:'Delete everything'})) await resetAllData();
       return;
@@ -7223,7 +7344,7 @@ const COLLECTIONS = ['tournaments','clubs','players','events','registrations','e
         state[col] = arr;
         ShareSync.schedule();   // keep live links up to date (no-op when nothing is shared)
         // Startup: render once when every collection has arrived, not once per collection.
-        if(pending>0){ pending--; if(pending===0){ state.ready=true; render();
+        if(pending>0){ pending--; if(pending===0){ state.ready=true; render(); CloudUI.start();
           setTimeout(async ()=>{ try{ const n = await repairFalseByes(); if(n){ toast('Fixed '+n+' knockout match'+(n===1?'':'es')+' that were wrongly shown as byes'); render(); } }catch(e){ console.error('bye repair', e); } }, 300);
         } return; }
         render();
