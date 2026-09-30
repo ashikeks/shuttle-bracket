@@ -412,6 +412,7 @@
   button.dp-day:hover{ background:var(--surface-2); }
   button.dp-day.dp-today{ font-weight:700; color:var(--court); }
   button.dp-day.dp-sel{ background:var(--court); color:#fff; }
+  button.dp-day:disabled{ color:var(--faint); opacity:.45; cursor:default; background:transparent; }
   .dp-foot{ display:flex; justify-content:space-between; margin-top:8px; gap:8px; }
   .dp-foot .btn{ flex:1; }
   .seg{ display:flex; gap:6px; flex-wrap:wrap; }
@@ -1151,7 +1152,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260930.174025';
+const APP_BUILD = '20260930.182210';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -6203,12 +6204,17 @@ function stdFoot(saveId, saveLabel){
    small self-contained calendar widget instead: a text input (still just
    holding a plain YYYY-MM-DD string in .value, so every existing read of
    .value keeps working unchanged) plus a popover calendar. */
-function dateFieldHtml(id, value, placeholder){
-  return `<div class="date-field"><input type="text" class="date-input" id="${id}" data-datepicker readonly value="${esc(value||'')}" placeholder="${placeholder||'Select date'}" autocomplete="off">${ICONS.calendar.replace('<svg ', '<svg class="date-ic" ')}</div>`;
+/* minFrom: id of another date field; days before its date can't be picked (e.g. end date >= start date). */
+function dateFieldHtml(id, value, placeholder, minFrom){
+  return `<div class="date-field"><input type="text" class="date-input" id="${id}" data-datepicker ${minFrom?`data-min-from="${minFrom}"`:''} readonly value="${esc(value||'')}" placeholder="${placeholder||'Select date'}" autocomplete="off">${ICONS.calendar.replace('<svg ', '<svg class="date-ic" ')}</div>`;
 }
 function dpYmd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function dpParse(s){ const m = s && /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; }
 const dpState = {input:null};
+function dpMin(input){
+  const id = input && input.getAttribute('data-min-from'), el = id && document.getElementById(id);
+  return el && dpParse(el.value) ? el.value : '';
+}
 function dpClose(){
   const pop = document.getElementById('dpPopover');
   if(pop) pop.remove();
@@ -6238,25 +6244,26 @@ function dpRenderGrid(){
   const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
   const selected = dpParse(input.value);
   const todayStr = dpYmd(new Date());
+  const min = dpMin(input);
   let cells = '';
   for(let i=0;i<startDow;i++) cells += '<div class="dp-cell dp-empty"></div>';
   for(let d=1; d<=daysInMonth; d++){
     const iso = dpYmd(new Date(viewYear, viewMonth, d));
     const isSel = selected && iso===dpYmd(selected);
     const isToday = iso===todayStr;
-    cells += `<div class="dp-cell"><button type="button" class="dp-day ${isSel?'dp-sel':''} ${isToday&&!isSel?'dp-today':''}" data-dp-day="${iso}">${d}</button></div>`;
+    cells += `<div class="dp-cell"><button type="button" class="dp-day ${isSel?'dp-sel':''} ${isToday&&!isSel?'dp-today':''}" data-dp-day="${iso}" ${min && iso<min?'disabled':''}>${d}</button></div>`;
   }
   const monthName = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
   return `<div class="dp-head"><button type="button" class="icon-btn" data-dp-nav="-1">&lsaquo;</button><span class="dp-month">${esc(monthName)}</span><button type="button" class="icon-btn" data-dp-nav="1">&rsaquo;</button></div>
     <div class="dp-dow">${['S','M','T','W','T','F','S'].map(d=>`<span>${d}</span>`).join('')}</div>
     <div class="dp-grid">${cells}</div>
-    <div class="dp-foot"><button type="button" class="btn btn-sm" data-dp-today="1">Today</button><button type="button" class="btn btn-sm" data-dp-clear="1">Clear</button></div>`;
+    <div class="dp-foot"><button type="button" class="btn btn-sm" data-dp-today="1" ${min && todayStr<min?'disabled':''}>Today</button><button type="button" class="btn btn-sm" data-dp-clear="1">Clear</button></div>`;
 }
 function dpOpen(input){
   if(dpState.input===input) return;
   dpClose();
   dpState.input = input;
-  const base = dpParse(input.value) || new Date();
+  const base = dpParse(input.value) || dpParse(dpMin(input)) || new Date();
   dpState.viewYear = base.getFullYear(); dpState.viewMonth = base.getMonth();
   const pop = document.createElement('div');
   pop.id='dpPopover'; pop.className='dp-popover';
@@ -6277,7 +6284,7 @@ function dpSetValue(iso){
   dpClose();
 }
 function dpPopoverClick(e){
-  const day = e.target.closest('[data-dp-day]'); if(day){ dpSetValue(day.getAttribute('data-dp-day')); return; }
+  const day = e.target.closest('[data-dp-day]'); if(day){ if(day.disabled) return; dpSetValue(day.getAttribute('data-dp-day')); return; }
   const nav = e.target.closest('[data-dp-nav]');
   if(nav){
     dpState.viewMonth += parseInt(nav.getAttribute('data-dp-nav'),10);
@@ -6286,7 +6293,7 @@ function dpPopoverClick(e){
     const pop = document.getElementById('dpPopover'); pop.innerHTML = dpRenderGrid(); dpReposition();
     return;
   }
-  if(e.target.closest('[data-dp-today]')){ dpSetValue(dpYmd(new Date())); return; }
+  if(e.target.closest('[data-dp-today]:not(:disabled)')){ dpSetValue(dpYmd(new Date())); return; }
   if(e.target.closest('[data-dp-clear]')){ dpSetValue(''); return; }
 }
 document.addEventListener('focusin', e=>{ if(e.target.matches && e.target.matches('[data-datepicker]')) dpOpen(e.target); });
@@ -6304,7 +6311,7 @@ function openTournamentDialog(existing){
     <div class="field"><label>Description</label><textarea id="fTDesc" rows="2">${esc(t.description||'')}</textarea></div>
     <div class="field-row">
       <div class="field"><label>Start date</label>${dateFieldHtml('fTStart', t.startDate)}</div>
-      <div class="field"><label>End date</label>${dateFieldHtml('fTEnd', t.endDate)}</div>
+      <div class="field"><label>End date</label>${dateFieldHtml('fTEnd', t.endDate, '', 'fTStart')}</div>
     </div>
     <div class="field"><label>Venue</label><input id="fTVenue" value="${esc(t.venue||'')}" placeholder="Riverside Sports Hall"></div>
     <div class="field"><label>Organizer</label><input id="fTOrganizer" value="${esc(t.organizer||'')}"></div>
@@ -6326,12 +6333,19 @@ function openTournamentDialog(existing){
     <div class="helptext">Players can register themselves while the status is <b>Registration open</b>, until the deadline. After it, only an admin can add players. Leave the date empty for no deadline.</div>
   `;
   openDialog(existing?'Edit tournament':'New tournament', body, stdFoot('btnSaveTournamentDlg', existing?'Save':'Create'));
+  // Moving the start past the end (or setting it first) moves the end date along with it.
+  document.getElementById('fTStart').addEventListener('change', ()=>{
+    const s = document.getElementById('fTStart').value, e = document.getElementById('fTEnd');
+    if(s && (!e.value || e.value < s)) e.value = s;
+  });
   document.getElementById('btnSaveTournamentDlg').onclick = async ()=>{
     const name = document.getElementById('fTName').value.trim();
     if(!name){ toast('Name is required', true); return; }
+    const startDate = document.getElementById('fTStart').value, endDate = document.getElementById('fTEnd').value;
+    if(startDate && endDate && endDate < startDate){ toast('End date can’t be before the start date', true); return; }
     const data = {
       name, description:document.getElementById('fTDesc').value.trim(),
-      startDate:document.getElementById('fTStart').value, endDate:document.getElementById('fTEnd').value,
+      startDate, endDate,
       venue:document.getElementById('fTVenue').value.trim(), organizer:document.getElementById('fTOrganizer').value.trim(),
       sponsors:sponsorList({sponsors:document.getElementById('fTSponsors').value}).join(', '),
       numCourts: parseInt(document.getElementById('fTCourts').value,10)||4, entryFee: parseFloat(document.getElementById('fTFee').value)||0,
