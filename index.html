@@ -1151,9 +1151,12 @@ const LOCAL_KEY = 'shuttle-bracket-store-v2';
 /* Live-sharing defaults. Empty here; scripts/build_web.py fills them from
    sharing/share-config.json so an App Store build works without setup. */
 const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key": "sb_publishable_oitaKq-e5EitypzdhwFjaw_TD8mE8Is", "viewerUrl": "https://ashikeks.github.io/shuttle-bracket/"};
+/* With all three built in, live sharing just works: its Settings card is hidden
+   and the built-in values are always used (so an old saved entry can't override them). */
+const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260930.172332';
+const APP_BUILD = '20260930.172811';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -1419,7 +1422,7 @@ const CloudUI = (function(){
    (email, phone, date of birth, photo) are never included. */
 function shareConfig(){
   const doc = (state.settings||[]).find(s=>s.id==='share') || {};
-  const pick = k => (doc[k]!=null && doc[k]!=='') ? String(doc[k]).trim() : (SHARE_DEFAULTS[k]||'');
+  const pick = k => (!SHARE_BUILTIN && doc[k]!=null && doc[k]!=='') ? String(doc[k]).trim() : (SHARE_DEFAULTS[k]||'');
   const cfg = {url: pick('url').replace(/\/+$/,''), key: pick('key'), viewerUrl: pick('viewerUrl')};
   if(!cfg.viewerUrl && /^https?:$/.test(location.protocol) && !/(^|\.)claude\.ai$|(^|\.)claudeusercontent\.com$/.test(location.hostname)){
     cfg.viewerUrl = location.origin + location.pathname;   // a self-hosted copy of this page can view its own links
@@ -5831,6 +5834,7 @@ function renderReportsView(){
 
 /* ---------- GLOBAL: SETTINGS ---------- */
 function renderShareSettingsCard(){
+  if(SHARE_BUILTIN) return '';
   setTimeout(()=>ViewerPageCheck.run(), 0);
   const doc = state.settings.find(x=>x.id==='share') || {};
   const val = k => esc(doc[k]!=null && doc[k]!=='' ? doc[k] : (SHARE_DEFAULTS[k]||''));
@@ -5916,7 +5920,7 @@ const GUIDE = [
     '<b>Rankings</b> (bottom bar) adds up ranking points from every event. Tap <b>How points work</b> there for the table. Filter by gender or club, and use <b>Clear filters</b> to reset.'
   ]},
   {id:'share', title:'8 · Share a live link', steps:[
-    'One-time setup: in the app <b>Settings → Live sharing</b>, enter your Supabase project URL, key and viewer page address, then <b>Test connection</b>.',
+    ...(SHARE_BUILTIN ? [] : ['One-time setup: in the app <b>Settings → Live sharing</b>, enter your Supabase project URL, key and viewer page address, then <b>Test connection</b>.']),
     'In a tournament, tap the <b>Share</b> button at the top and <b>Create live link</b>. Send the link or QR code to players and spectators.',
     'Viewers see Live and upcoming matches, Completed results and Standings, and can follow one player. It updates by itself.',
     'The tournament’s sponsors scroll along under the tabs. A match appears in the upcoming list once both of its players are known.'
