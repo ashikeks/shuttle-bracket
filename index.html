@@ -630,11 +630,6 @@
   .sb-warn{ display:flex; gap:8px; align-items:flex-start; margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--danger-soft, rgba(220,50,50,.1)); color:var(--danger); font-size:12.5px; font-weight:600; }
   .sb-warn svg{ width:16px; height:16px; flex:none; margin-top:1px; }
   .g-remove{ float:right; border:none; background:none; color:var(--danger); font:inherit; font-size:12px; font-weight:700; cursor:pointer; padding:0; }
-  .guide-link{ width:100%; display:flex; align-items:center; gap:12px; text-align:left; padding:13px 14px; margin-bottom:14px; border-radius:14px; border:1px solid color-mix(in srgb, var(--court) 30%, var(--border)); background:linear-gradient(135deg, color-mix(in srgb, var(--court) 9%, var(--surface)), var(--surface)); color:var(--ink); font:inherit; cursor:pointer; }
-  .guide-link .grow{ flex:1; min-width:0; }
-  .guide-link b{ display:block; font-size:15px; }
-  .guide-link small{ display:block; color:var(--muted); font-size:12.5px; margin-top:2px; }
-  .guide-link > svg{ width:18px; height:18px; color:var(--faint); flex:none; }
   .guide-intro{ display:flex; gap:10px; padding:12px 14px; border-radius:14px; background:color-mix(in srgb, var(--court) 9%, var(--surface)); border:1px solid color-mix(in srgb, var(--court) 22%, var(--border)); margin-bottom:12px; font-size:13.5px; line-height:1.5; }
   .guide-intro > svg{ width:20px; height:20px; color:var(--court); flex:none; margin-top:2px; }
   .guide-intro span{ color:var(--muted); font-size:12.5px; }
@@ -1156,7 +1151,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260930.172811';
+const APP_BUILD = '20260930.174025';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -5865,7 +5860,7 @@ function renderDataSettingsCard(){
       <p class="helptext" style="margin:8px 0 0">Reset deletes every tournament, player, club, draw and result on this device. It can't be undone.</p>
     </div>`;
 }
-/* ---------- USER GUIDE (Settings -> User guide, and More) ---------- */
+/* ---------- USER GUIDE (More -> User guide, or the sidebar) ---------- */
 const GUIDE = [
   {id:'tournament', title:'1 · Create a tournament', steps:[
     'Go to <b>Tournaments</b> (bottom bar) and tap <b>+ New tournament</b> at the top.',
@@ -5944,7 +5939,6 @@ function renderGuideView(){
 }
 function renderSettingsView(){
   return `<div class="t-header page-h"><div><h2>Settings</h2><div class="t-sub">App settings</div></div></div>
-    <button class="guide-link" data-nav="guide"><span class="more-ic">${ICONS.info}</span><span class="grow"><b>User guide</b><small>How to set up a tournament, events and matches, step by step</small></span>${ICONS.chevRight}</button>
     ${renderShareSettingsCard()}
     ${CloudUI.card()}
     ${renderDataSettingsCard()}
