@@ -388,6 +388,7 @@
   .dlg-head h3{ font-size:16px; margin:0; text-transform:none; letter-spacing:0; font-family:"Public Sans"; font-weight:700; }
   .dlg-body{ padding:16px 18px; display:flex; flex-direction:column; gap:12px; max-height:64vh; overflow-y:auto; }
   .dlg-foot{ display:flex; justify-content:flex-end; gap:8px; padding:14px 18px; border-top:1px solid var(--border); flex-wrap:wrap; }
+  [hidden]{ display:none !important; }   /* the attribute must beat display rules such as .field{display:flex} */
   .field{ display:flex; flex-direction:column; gap:5px; }
   .field label{ font-size:12px; font-weight:600; color:var(--muted); }
   .field input, .field select, .field textarea{ border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:9px; padding:9px 10px; font-size:14px; font-family:inherit; width:100%; }
@@ -1152,7 +1153,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20260930.190935';
+const APP_BUILD = '20261003.200936';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3683,22 +3684,34 @@ async function buildEntriesFromRegistrations(event){
     existing.forEach(en=>{ const sd = validSeed(en.seed); if(sd==null) return;
       if(en.registrationId) seedFor['r:'+en.registrationId] = sd;
       seedFor['p:'+pairKey(en.player1Id, en.player2Id)] = sd; });
-    for(const en of existing) await Store.remove('entries', en.id);
     const doubles = isDoublesType(event.type);
     const seen = new Set();
     const badMixed = [];
+    /* An entry that is still valid (same registration, or the same players)
+       keeps its id, so matches already played stay linked to it when a draw
+       is regenerated keeping played matches. Americano team entries belong
+       to the draw and are always rebuilt. */
+    const reusable = existing.filter(en=>!en.isAmericanoTeam), used = new Set();
+    const plan = [];
     for(const r of regs){
       if(seen.has(r.id)) continue;
       if(doubles && !r.partnerId) continue; // needs a partner before entering
       if(mixedPairProblem(event, r.playerId, r.partnerId)){ badMixed.push(playerName(r.playerId)+' / '+playerName(r.partnerId)); continue; }
       seen.add(r.id);
-      const p1club = (playerById(r.playerId)||{}).clubId || null;
       const p2 = doubles ? r.partnerId : null;
-      const seed = seedFor['r:'+r.id] ?? seedFor['p:'+pairKey(r.playerId, p2)] ?? null;
-      await Store.add('entries', {
+      const old = reusable.find(en=>!used.has(en.id) && en.registrationId===r.id)
+        || reusable.find(en=>!used.has(en.id) && pairKey(en.player1Id, en.player2Id)===pairKey(r.playerId, p2));
+      if(old) used.add(old.id);
+      plan.push({old, data:{
         eventId:event.id, player1Id:r.playerId, player2Id: p2,
-        seed, clubId:p1club, registrationId:r.id
-      });
+        seed: seedFor['r:'+r.id] ?? seedFor['p:'+pairKey(r.playerId, p2)] ?? null,
+        clubId:(playerById(r.playerId)||{}).clubId || null, registrationId:r.id
+      }});
+    }
+    for(const en of existing) if(!used.has(en.id)) await Store.remove('entries', en.id);
+    for(const {old, data} of plan){
+      if(old) await Store.update('entries', old.id, data);
+      else await Store.add('entries', data);
     }
     if(badMixed.length) toast('Left out of '+event.name+' (mixed doubles needs one man and one woman): '+badMixed.join(', '), true);
   }, 'Entries built from confirmed registrations');
@@ -3801,6 +3814,12 @@ async function generateDraw(event, opts){
     if(existingDraw && existingDraw.status==='published' && !opts.confirmedRegen){
       toast('This draw is already published - use "Regenerate" to confirm.', true); return;
     }
+    if(existingDraw && opts.keepPlayed){
+      const why = keepPlayedUnavailable(event, existingDraw, format);
+      if(why){ toast(why, true); return; }
+      await regenerateKeepingPlayed(event, existingDraw, ordered, ctx);
+      return;
+    }
     if(existingDraw){
       for(const m of eventMatches(event.id)) await Store.remove('matches', m.id);
       if(existingDraw.format==='americano'){
@@ -3841,6 +3860,88 @@ async function generateDraw(event, opts){
     await Store.update('events', event.id, {status:'draw_published'});
     await notify(event.tournamentId, null, 'draw_published', 'Draw published for ' + event.name + '.');
   }, 'Draw generated');
+}
+
+/* ---------- Regenerating a draw that has played matches ----------
+   "Keep played matches" keeps every match that is finished or in progress
+   (between players still in the event) with its result, and redraws only the
+   matches not played yet. It works where matches are independent pairings:
+   round robin, and the group stage of groups + knockout (the groups stay as
+   they are; new entries join the smallest groups, withdrawn ones leave; the
+   knockout placeholders are rebuilt). Brackets and Americano rotations depend
+   on earlier rounds, so those can only be redrawn completely. */
+const PLAYED_STATUSES = ['completed','walkover','retired','in_progress'];
+function playedMatches(eventId){ return eventMatches(eventId).filter(m=>PLAYED_STATUSES.includes(m.status)); }
+function keepPlayedUnavailable(event, draw, format){
+  if(!draw) return 'There is no draw yet.';
+  if(format!==draw.format) return 'The format is changing, so the draw has to be made again from the start.';
+  if(format==='americano') return 'An Americano schedule rotates partners across all rounds, so it can only be redrawn completely.';
+  if(format==='single_elimination' || format==='double_elimination') return 'In a knockout bracket later rounds depend on earlier results, so it can only be redrawn completely.';
+  if(format==='group_knockout' && playedMatches(event.id).some(m=>m.bracket!=='GRP')) return 'The knockout stage has started, so the draw can only be redrawn completely.';
+  return '';
+}
+function keepGroupsFor(oldGroups, ordered){
+  const ids = new Set(ordered.map(e=>e.id));
+  const groups = (oldGroups||[]).map(g=>({...g, entryIds:(g.entryIds||[]).filter(id=>ids.has(id))}));
+  const placed = new Set(groups.flatMap(g=>g.entryIds));
+  for(const e of ordered){
+    if(placed.has(e.id) || !groups.length) continue;
+    groups.slice().sort((a,b)=>a.entryIds.length-b.entryIds.length)[0].entryIds.push(e.id);
+  }
+  return groups.filter(g=>g.entryIds.length);
+}
+async function regenerateKeepingPlayed(event, draw, ordered, ctx){
+  const inEvent = new Set(ordered.map(e=>e.id));
+  const all = eventMatches(event.id);
+  const kept = all.filter(m=>PLAYED_STATUSES.includes(m.status) && inEvent.has(m.entry1Id) && inEvent.has(m.entry2Id));
+  const keptIds = new Set(kept.map(m=>m.id));
+  for(const m of all) if(!keptIds.has(m.id)) await Store.remove('matches', m.id);
+  ctx.drawId = draw.id;
+  const pairKey = (a,b)=>[a,b].sort().join('|');
+  const done = new Set(kept.map(m=>pairKey(m.entry1Id, m.entry2Id)));
+  const byId = Object.fromEntries(ordered.map(e=>[e.id,e]));
+  let groups = draw.groups||[], fresh = [];
+  if(draw.format==='group_knockout'){
+    groups = keepGroupsFor(draw.groups, ordered);
+    groups.forEach(g=>{ fresh = fresh.concat(buildRoundRobin({...ctx, groupId:g.id}, g.entryIds.map(id=>byId[id]))); });
+  } else {
+    fresh = buildRoundRobin(ctx, ordered);
+  }
+  fresh = fresh.filter(m=>!done.has(pairKey(m.entry1Id, m.entry2Id)));
+  if(draw.format==='group_knockout') fresh = fresh.concat(buildKnockoutPlaceholders(ctx, groups, draw.qualifiersPerGroup||2, {thirdPlace:event.thirdPlaceMatch}));
+  await Store.update('draws', draw.id, {groups, generatedAt: nowIso()});
+  for(const m of fresh) await Store.add('matches', m, m.id);
+  await Store.update('events', event.id, {status: kept.length ? 'in_progress' : 'draw_published'});
+  if(draw.format==='group_knockout') await fillKnockoutFromGroups(event.id);
+  await audit(event.tournamentId, state.role, 'draw_regenerated', 'Draw regenerated for ' + event.name + ', keeping ' + kept.length + ' played match' + (kept.length===1?'':'es') + '.');
+  await notify(event.tournamentId, null, 'draw_published', 'Draw updated for ' + event.name + '.');
+}
+/* Asks how to regenerate a published draw: 'keep' (played matches stay),
+   'all' (start again), or null (cancelled). */
+function chooseRegenMode(ev, draw, format){
+  const played = playedMatches(ev.id).length;
+  if(!played) return confirmDialog('This draw is already published. Regenerating replaces all of its matches and is logged in the audit trail. Continue?', {okLabel:'Regenerate'}).then(ok=>ok?'all':null);
+  const why = keepPlayedUnavailable(ev, draw, format);
+  const body = `
+    <p class="helptext" style="margin-top:0"><b>${played} match${played===1?' has':'es have'} been played</b> (or ${played===1?'is':'are'} in progress) in ${esc(ev.name)}. How should the draw be regenerated?</p>
+    <label class="row" style="gap:10px;align-items:flex-start;padding:10px 0;${why?'opacity:.55':''}"><input type="radio" name="regenMode" value="keep" ${why?'disabled':'checked'} style="margin-top:3px">
+      <span><b>Keep played matches</b><br><span class="helptext">Their results stay. Only the matches not played yet are drawn again, using the current entries.${format==='group_knockout'?' The groups stay as they are: new entries join the smallest groups.':''}</span>${why?`<br><span class="helptext">${esc(why)}</span>`:''}</span></label>
+    <label class="row" style="gap:10px;align-items:flex-start;padding:10px 0"><input type="radio" name="regenMode" value="all" ${why?'checked':''} style="margin-top:3px">
+      <span><b>Regenerate everything</b><br><span class="helptext">Discards all matches and results in this event and makes a new draw.</span></span></label>
+    <p class="helptext" style="margin-bottom:0">Either way, this is logged in the audit trail.</p>`;
+  openDialog('Regenerate draw', body, `<button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn btn-danger" id="btnRegenGo">Regenerate</button>`);
+  const dlg = document.getElementById('dlgGeneric');
+  return new Promise(resolve=>{
+    let done = false;
+    const finish = v=>{ if(done) return; done = true; dlg.removeEventListener('close', onClose); resolve(v); };
+    const onClose = ()=>finish(null);
+    dlg.addEventListener('close', onClose);
+    document.getElementById('btnRegenGo').onclick = ()=>{
+      const sel = document.querySelector('input[name="regenMode"]:checked');
+      const v = sel ? sel.value : 'all';
+      finish(v); closeGenericDialog();
+    };
+  });
 }
 
 /* Puts group qualifiers into the knockout placeholders. A group's slots are
@@ -5904,7 +6005,7 @@ const GUIDE = [
     'Groups + knockout: the group matches and the whole knockout bracket are created together. Knockout places show as <b>A1</b> (winner of Group A), <b>B2</b> (runner-up of Group B) and so on, and fill in with names as soon as each group has finished. Correcting a group score updates any knockout match not yet played.',
     'Groups + knockout draws made in an older version have no knockout yet: tap <b>Add knockout bracket</b> to add it.',
     'Americano: everyone gets the same number of games and nobody sits out two rounds in a row. Use <b>Add rounds</b> to play more, and <b>Create final</b> to put the top four in a final.',
-    'Made a mistake? <b>Regenerate draw</b> starts it again (you are asked first; scores in that event are lost). Seeds are kept.'
+    'Made a mistake, or entries changed? <b>Regenerate draw</b> makes it again. Seeds are kept. If matches have been played you can <b>keep played matches</b> (round robin and the group stage) so only the unplayed ones are redrawn, or <b>regenerate everything</b>, which discards all scores in that event.'
   ]},
   {id:'matches', title:'6 · Schedule and play matches', steps:[
     'Open the <b>Matches</b> tab. Matches are grouped: <b>On court now</b>, <b>Schedule</b> (by start time), <b>Not scheduled yet</b> and <b>Completed</b>.',
@@ -7013,8 +7114,9 @@ document.addEventListener('click', async (e)=>{
       const thirdPlace = document.getElementById('fThirdPlace').checked;
       await updateEvent(ev.id, {drawFormat:format, thirdPlaceMatch:thirdPlace});
       if(draw && draw.status==='published'){
-        if(!await confirmDialog('This draw is already published. Regenerating will discard current results for this event and is logged in the audit trail. Continue?', {okLabel:'Regenerate'})) return;
-        await generateDraw({...ev, drawFormat:format, thirdPlaceMatch:thirdPlace}, {confirmedRegen:true, groupSize});
+        const mode = await chooseRegenMode(ev, draw, format);
+        if(!mode) return;
+        await generateDraw({...ev, drawFormat:format, thirdPlaceMatch:thirdPlace}, {confirmedRegen:true, groupSize, keepPlayed: mode==='keep'});
       } else {
         await generateDraw({...ev, drawFormat:format, thirdPlaceMatch:thirdPlace}, {groupSize});
       }
