@@ -1153,7 +1153,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20261003.200936';
+const APP_BUILD = '20261003.202231';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3690,7 +3690,7 @@ async function buildEntriesFromRegistrations(event){
     /* An entry that is still valid (same registration, or the same players)
        keeps its id, so matches already played stay linked to it when a draw
        is regenerated keeping played matches. Americano team entries belong
-       to the draw and are always rebuilt. */
+       to the draw: they are left alone here (generating the draw replaces them). */
     const reusable = existing.filter(en=>!en.isAmericanoTeam), used = new Set();
     const plan = [];
     for(const r of regs){
@@ -3708,7 +3708,7 @@ async function buildEntriesFromRegistrations(event){
         clubId:(playerById(r.playerId)||{}).clubId || null, registrationId:r.id
       }});
     }
-    for(const en of existing) if(!used.has(en.id)) await Store.remove('entries', en.id);
+    for(const en of existing) if(!used.has(en.id) && !en.isAmericanoTeam) await Store.remove('entries', en.id);
     for(const {old, data} of plan){
       if(old) await Store.update('entries', old.id, data);
       else await Store.add('entries', data);
@@ -3795,7 +3795,7 @@ async function generateDraw(event, opts){
   opts = opts || {};
   const tournament = tournamentById(event.tournamentId);
   await buildEntriesFromRegistrations(event);
-  const entriesRaw = eventEntries(event.id).length ? eventEntries(event.id) : await Store.getAll('entries', [['eventId', event.id]]);
+  const entriesRaw = (eventEntries(event.id).length ? eventEntries(event.id) : await Store.getAll('entries', [['eventId', event.id]])).filter(e=>!e.isAmericanoTeam);
   if(entriesRaw.length < 2){ toast('Need at least 2 confirmed entries to generate a draw', true); return; }
   if(!formatAllowedForType(event.drawFormat, event.type||'singles')){ toast('Americano isn’t available for singles events. Pick another format.', true); return; }
   if(event.drawFormat==='americano' && entriesRaw.length < 4){ toast('Americano needs at least 4 confirmed entries', true); return; }
@@ -3868,14 +3868,14 @@ async function generateDraw(event, opts){
    matches not played yet. It works where matches are independent pairings:
    round robin, and the group stage of groups + knockout (the groups stay as
    they are; new entries join the smallest groups, withdrawn ones leave; the
-   knockout placeholders are rebuilt). Brackets and Americano rotations depend
-   on earlier rounds, so those can only be redrawn completely. */
+   knockout placeholders are rebuilt), and Americano (see below). Brackets
+   depend on earlier rounds, so those can only be redrawn completely. */
 const PLAYED_STATUSES = ['completed','walkover','retired','in_progress'];
 function playedMatches(eventId){ return eventMatches(eventId).filter(m=>PLAYED_STATUSES.includes(m.status)); }
 function keepPlayedUnavailable(event, draw, format){
   if(!draw) return 'There is no draw yet.';
   if(format!==draw.format) return 'The format is changing, so the draw has to be made again from the start.';
-  if(format==='americano') return 'An Americano schedule rotates partners across all rounds, so it can only be redrawn completely.';
+  if(format==='americano' && playedMatches(event.id).some(m=>m.bracket==='AMF')) return 'The Americano final has been played, so the draw can only be redrawn completely.';
   if(format==='single_elimination' || format==='double_elimination') return 'In a knockout bracket later rounds depend on earlier results, so it can only be redrawn completely.';
   if(format==='group_knockout' && playedMatches(event.id).some(m=>m.bracket!=='GRP')) return 'The knockout stage has started, so the draw can only be redrawn completely.';
   return '';
@@ -3891,6 +3891,7 @@ function keepGroupsFor(oldGroups, ordered){
   return groups.filter(g=>g.entryIds.length);
 }
 async function regenerateKeepingPlayed(event, draw, ordered, ctx){
+  if(draw.format==='americano') return regenerateAmericanoKeepingPlayed(event, draw, ordered, ctx);
   const inEvent = new Set(ordered.map(e=>e.id));
   const all = eventMatches(event.id);
   const kept = all.filter(m=>PLAYED_STATUSES.includes(m.status) && inEvent.has(m.entry1Id) && inEvent.has(m.entry2Id));
@@ -3916,6 +3917,183 @@ async function regenerateKeepingPlayed(event, draw, ordered, ctx){
   await audit(event.tournamentId, state.role, 'draw_regenerated', 'Draw regenerated for ' + event.name + ', keeping ' + kept.length + ' played match' + (kept.length===1?'':'es') + '.');
   await notify(event.tournamentId, null, 'draw_published', 'Draw updated for ' + event.name + '.');
 }
+/* Americano, keeping played matches. Played rounds are kept (renumbered 1..k
+   if unplayed rounds sat between them) and the rest is drawn again for the
+   current players:
+   - Classic / Mixed: everyone is brought up to the same number of games L -
+     at least what a full schedule gives (or what the old draw planned), and
+     more if a late entry needs it - in new rounds where the players furthest
+     behind play first (random among equals), partners are matched to repeat
+     as little as possible and opponents to meet as little as possible. When
+     the numbers can't come out exactly equal, games differ by at most one.
+   - Mexicano: the open round is paired again from the current standings
+     (completing a part-played round with the players who haven't played it). */
+function americanoFullScheduleGames(n, mixedMen){
+  if(mixedMen) return mixedMen - (mixedMen%2);
+  const mod = n%4; return mod<=1 ? n-1 : n-mod;
+}
+function americanoHistory(matches, pids){
+  const n = pids.length, idx = {}; pids.forEach((p,i)=>{ idx[p]=i; });
+  const h = {games:new Array(n).fill(0), partner:Array.from({length:n},()=>new Array(n).fill(0)), opp:Array.from({length:n},()=>({}))};
+  matches.forEach(m=>{
+    const t1 = entryPlayerIds(entryById(m.entry1Id)).map(p=>idx[p]), t2 = entryPlayerIds(entryById(m.entry2Id)).map(p=>idx[p]);
+    [...t1,...t2].forEach(x=>{ if(x!==undefined) h.games[x]++; });
+    [t1,t2].forEach(([x,y])=>{ if(x!==undefined && y!==undefined){ h.partner[x][y]++; h.partner[y][x]++; } });
+    t1.forEach(x=>t2.forEach(y=>{ if(x!==undefined && y!==undefined){ h.opp[x][y]=(h.opp[x][y]||0)+1; h.opp[y][x]=(h.opp[y][x]||0)+1; } }));
+  });
+  return h;
+}
+/* Games still to play per player (d) and how many games that makes (G), for a
+   target of L games each. Each game takes `per` players from every group
+   (Classic: 4 from everyone; Mixed: 2 men + 2 women). If a group's total isn't
+   a whole number of games, the players with the fewest games get one extra. */
+function americanoDeficits(games, L, groups, per){
+  const d = games.map(g=>Math.max(0, L-g));
+  const G = Math.max(...groups.map(gr=>Math.ceil(gr.reduce((s,i)=>s+d[i],0)/per)));
+  let extras = 0;
+  groups.forEach(gr=>{
+    let need = per*G - gr.reduce((s,i)=>s+d[i],0);
+    while(need>0){
+      const order = americanoShuffle(gr.slice()).sort((a,b)=>(games[a]+d[a])-(games[b]+d[b]));
+      for(const i of order){ if(need<=0) break; d[i]++; need--; extras++; }
+    }
+  });
+  return {d, G, extras, ok: Math.max(0,...d) <= G};
+}
+function americanoRestRounds(hist, d, G, groups, per, genders, roundSize){
+  const n = d.length, idxs = [...Array(n).keys()];
+  const pc = hist.partner.map(r=>r.slice()), opp = hist.opp.map(o=>({...o}));
+  d = d.slice();
+  const rounds = [];
+  let left = G;
+  while(left>0){
+    let g = Math.min(roundSize, left, ...groups.map(gr=>Math.floor(gr.filter(i=>d[i]>0).length/per)));
+    let pick = null;
+    for(; g>=1; g--){
+      pick = groups.map(gr=>americanoShuffle(gr.filter(i=>d[i]>0)).sort((a,b)=>d[b]-d[a]).slice(0, per*g)).flat();
+      const sel = new Set(pick);
+      if(Math.max(0, ...idxs.map(i=>d[i]-(sel.has(i)?1:0))) <= left-g) break;
+    }
+    if(g<1 || !pick) throw new Error('Could not schedule the remaining Americano games.');
+    let pairs = null;
+    const maxPc = Math.max(0, ...pc.map(row=>Math.max(0,...row)));
+    for(let lim=0; lim<=maxPc+1 && !pairs; lim++){
+      const blocked = idxs.map(p=>{ const row=new Uint8Array(n); for(let q=0;q<n;q++) row[q] = (pc[p][q]>lim || (genders && genders[p]===genders[q])) ? 1 : 0; return row; });
+      let best = null, bestCost = Infinity;
+      for(let tries=0; tries<25; tries++){
+        const m = americanoPerfectMatching(pick, blocked, (p,q)=>pc[p][q]);
+        if(!m) continue;
+        const c = m.reduce((s,[a,b])=>s+pc[a][b]*pc[a][b], 0);
+        if(c<bestCost){ bestCost=c; best=m; if(c===0) break; }
+      }
+      pairs = best;
+    }
+    if(!pairs) throw new Error('Could not pair partners for round ' + (rounds.length+1) + '.');
+    pairs.forEach(([a,b])=>{ pc[a][b]++; pc[b][a]++; });
+    pick.forEach(i=>d[i]--);
+    const sel = new Set(pick);
+    rounds.push({games: americanoPairTeams(pairs, opp), sit: idxs.filter(i=>!sel.has(i))});
+    left -= g;
+  }
+  return rounds;
+}
+async function regenerateAmericanoKeepingPlayed(event, draw, ordered, ctx){
+  const variant = event.americanoVariant||'classic';
+  const pids = ordered.map(e=>e.player1Id);
+  const n = pids.length;
+  if(n<4) throw new Error('Americano needs at least 4 players.');
+  const genders = variant==='mixed' ? pids.map(p=>normGender((playerById(p)||{}).gender)) : null;
+  const all = eventMatches(event.id);
+  const oldAm = all.filter(m=>m.bracket==='AM');
+  const kept = oldAm.filter(m=>PLAYED_STATUSES.includes(m.status));
+  const keptIds = new Set(kept.map(m=>m.id));
+  ctx.drawId = draw.id;
+  // What the old draw planned per player (so a regenerate doesn't shorten the event).
+  const planned = americanoHistory(oldAm, pids).games;
+  // Remove unplayed matches (and an unplayed final) and team entries no kept match uses.
+  for(const m of all) if(!keptIds.has(m.id)) await Store.remove('matches', m.id);
+  const keptTeams = new Set(kept.flatMap(m=>[m.entry1Id, m.entry2Id]));
+  for(const te of eventEntries(event.id).filter(e=>e.isAmericanoTeam && !keptTeams.has(e.id))) await Store.remove('entries', te.id);
+  // Renumber kept rounds 1..k.
+  const roundMap = {}; [...new Set(kept.map(m=>m.round))].sort((a,b)=>a-b).forEach((r,i)=>{ roundMap[r]=i+1; });
+  for(const m of kept) if(roundMap[m.round]!==m.round){
+    await Store.update('matches', m.id, {round: roundMap[m.round]});
+    for(const eid of [m.entry1Id, m.entry2Id]) await Store.update('entries', eid, {americanoRound: roundMap[m.round]});
+  }
+  const lastKept = Object.keys(roundMap).length;
+  const keptNow = kept.map(m=>({...m, round: roundMap[m.round]}));
+  const sitOut = {};
+  for(let r=1; r<=lastKept; r++){
+    const inRound = new Set(keptNow.filter(m=>m.round===r).flatMap(m=>[m.entry1Id,m.entry2Id]).map(entryById).flatMap(entryPlayerIds));
+    const sit = pids.filter(p=>!inRound.has(p)); if(sit.length) sitOut[r] = sit;
+  }
+  const hist = americanoHistory(keptNow, pids);
+  const newEntries = [], newMatches = [];
+  const addRound = (roundNum, games, prevLast)=>{
+    americanoOrderGamesInRound(games, prevLast, g=>g.flat()).forEach(([t1,t2], gi)=>{
+      const mk = ([a,b])=>{ const t = {id:uid(), eventId:event.id, player1Id:pids[a], player2Id:pids[b], seed:null, clubId:null, registrationId:null, isAmericanoTeam:true, americanoRound:roundNum}; newEntries.push(t); return t; };
+      const m = baseMatch({...ctx, bracket:'AM', round:roundNum, position:gi, e1:mk(t1), e2:mk(t2)});
+      m.id = uid(); newMatches.push(m);
+    });
+  };
+  if(variant==='mexicano'){
+    // Complete a part-played last round, or pair a new one, from the current standings.
+    const idx = {}; pids.forEach((p,i)=>{ idx[p]=i; });
+    const lastMs = keptNow.filter(m=>m.round===lastKept);
+    const playedLast = new Set(lastMs.flatMap(m=>[m.entry1Id,m.entry2Id]).map(entryById).flatMap(entryPlayerIds));
+    const fillLast = lastKept>0 && pids.some(p=>!playedLast.has(p)) && pids.filter(p=>!playedLast.has(p)).length>=4 && playedLast.size>0;
+    const roundNum = fillLast ? lastKept : lastKept+1;
+    const standing = computeAmericanoStandings(ordered, keptNow);
+    const byPid = {}; ordered.forEach(e=>{ byPid[e.player1Id]=e; });
+    let pool = standing.map(r=>byPid[r.playerId]).filter(Boolean);
+    if(fillLast) pool = pool.filter(e=>!playedLast.has(e.player1Id));
+    const sits = {}; Object.values(sitOut).forEach(l=>l.forEach(p=>{ sits[p]=(sits[p]||0)+1; }));
+    const gamesBy = {}; pids.forEach((p,i)=>{ gamesBy[p]=hist.games[i]; });
+    const lastSit = new Set(fillLast ? [] : (sitOut[lastKept]||[]));
+    const sitters = mexicanoSitters(pool, pool.length%4, gamesBy, sits, lastSit);
+    const built = buildMexicanoRound(ctx, pool, roundNum, sitters);
+    built.teamEntries.forEach(t=>newEntries.push(t));
+    built.matches.forEach((m,i)=>{ if(fillLast) m.position = lastMs.length+i; newMatches.push(m); });
+    const sitIds = built.sitOut.map(e=>e.player1Id);
+    if(sitIds.length) sitOut[roundNum] = sitIds; else delete sitOut[roundNum];
+  } else {
+    let groups, per, roundSize, fullGames;
+    if(genders){
+      const men = pids.map((p,i)=>i).filter(i=>genders[i]==='male'), women = pids.map((p,i)=>i).filter(i=>genders[i]==='female');
+      if(men.length<4 || men.length!==women.length) throw new Error('Mixed Americano needs an equal number of men and women, at least 4 of each.');
+      groups = [men, women]; per = 2; roundSize = Math.floor(men.length/2); fullGames = americanoFullScheduleGames(n, men.length);
+    } else {
+      groups = [pids.map((p,i)=>i)]; per = 4; roundSize = Math.floor(n/4); fullGames = americanoFullScheduleGames(n, 0);
+    }
+    const L0 = Math.max(fullGames, ...planned, ...hist.games);
+    let choice = null;
+    for(let L=L0; L<L0+40; L++){
+      const r = americanoDeficits(hist.games, L, groups, per);
+      if(!r.ok) continue;
+      if(!choice) choice = r;
+      if(r.extras===0){ choice = r; break; }
+      if(L>=L0+8 && choice) break;
+    }
+    if(!choice) throw new Error('Could not balance the remaining Americano games.');
+    const rounds = americanoRestRounds(hist, choice.d, choice.G, groups, per, genders, roundSize);
+    let prevLast = null;
+    const lastMs = keptNow.filter(m=>m.round===lastKept).sort((a,b)=>b.position-a.position);
+    if(lastMs.length){ const idx = {}; pids.forEach((p,i)=>{ idx[p]=i; }); prevLast = new Set([lastMs[0].entry1Id,lastMs[0].entry2Id].map(entryById).flatMap(entryPlayerIds).map(p=>idx[p])); }
+    rounds.forEach((rd, ri)=>{
+      const roundNum = lastKept + ri + 1;
+      if(rd.sit.length) sitOut[roundNum] = rd.sit.map(i=>pids[i]);
+      addRound(roundNum, rd.games, prevLast);
+      prevLast = new Set(rd.games[rd.games.length-1].flat());
+    });
+  }
+  markSchedulable(newMatches);
+  for(const te of newEntries) await Store.add('entries', te, te.id);
+  for(const m of newMatches) await Store.add('matches', m, m.id);
+  await Store.update('draws', draw.id, {americanoSitOut: Object.keys(sitOut).length ? sitOut : null, generatedAt: nowIso()});
+  await Store.update('events', event.id, {status: kept.length ? 'in_progress' : 'draw_published'});
+  await audit(event.tournamentId, state.role, 'draw_regenerated', 'Draw regenerated for ' + event.name + ', keeping ' + kept.length + ' played match' + (kept.length===1?'':'es') + '.');
+  await notify(event.tournamentId, null, 'draw_published', 'Draw updated for ' + event.name + '.');
+}
 /* Asks how to regenerate a published draw: 'keep' (played matches stay),
    'all' (start again), or null (cancelled). */
 function chooseRegenMode(ev, draw, format){
@@ -3925,7 +4103,7 @@ function chooseRegenMode(ev, draw, format){
   const body = `
     <p class="helptext" style="margin-top:0"><b>${played} match${played===1?' has':'es have'} been played</b> (or ${played===1?'is':'are'} in progress) in ${esc(ev.name)}. How should the draw be regenerated?</p>
     <label class="row" style="gap:10px;align-items:flex-start;padding:10px 0;${why?'opacity:.55':''}"><input type="radio" name="regenMode" value="keep" ${why?'disabled':'checked'} style="margin-top:3px">
-      <span><b>Keep played matches</b><br><span class="helptext">Their results stay. Only the matches not played yet are drawn again, using the current entries.${format==='group_knockout'?' The groups stay as they are: new entries join the smallest groups.':''}</span>${why?`<br><span class="helptext">${esc(why)}</span>`:''}</span></label>
+      <span><b>Keep played matches</b><br><span class="helptext">Their results stay. Only the matches not played yet are drawn again, using the current entries.${format==='group_knockout'?' The groups stay as they are: new entries join the smallest groups.':''}${format==='americano'?((ev.americanoVariant||'classic')==='mexicano'?' The open round is paired again from the current standings.':' New rounds shuffle the players so everyone ends up with the same number of games (or within one), with as few repeat partners as possible.'):''}</span>${why?`<br><span class="helptext">${esc(why)}</span>`:''}</span></label>
     <label class="row" style="gap:10px;align-items:flex-start;padding:10px 0"><input type="radio" name="regenMode" value="all" ${why?'checked':''} style="margin-top:3px">
       <span><b>Regenerate everything</b><br><span class="helptext">Discards all matches and results in this event and makes a new draw.</span></span></label>
     <p class="helptext" style="margin-bottom:0">Either way, this is logged in the audit trail.</p>`;
@@ -6005,7 +6183,7 @@ const GUIDE = [
     'Groups + knockout: the group matches and the whole knockout bracket are created together. Knockout places show as <b>A1</b> (winner of Group A), <b>B2</b> (runner-up of Group B) and so on, and fill in with names as soon as each group has finished. Correcting a group score updates any knockout match not yet played.',
     'Groups + knockout draws made in an older version have no knockout yet: tap <b>Add knockout bracket</b> to add it.',
     'Americano: everyone gets the same number of games and nobody sits out two rounds in a row. Use <b>Add rounds</b> to play more, and <b>Create final</b> to put the top four in a final.',
-    'Made a mistake, or entries changed? <b>Regenerate draw</b> makes it again. Seeds are kept. If matches have been played you can <b>keep played matches</b> (round robin and the group stage) so only the unplayed ones are redrawn, or <b>regenerate everything</b>, which discards all scores in that event.'
+    'Made a mistake, or entries changed? <b>Regenerate draw</b> makes it again; seeds are kept. If matches have been played, choose <b>Keep played matches</b> (round robin, the group stage and Americano) to redraw only the unplayed ones - in Americano the players are shuffled so everyone ends up with the same number of games - or <b>Regenerate everything</b>, which discards all scores in that event.'
   ]},
   {id:'matches', title:'6 · Schedule and play matches', steps:[
     'Open the <b>Matches</b> tab. Matches are grouped: <b>On court now</b>, <b>Schedule</b> (by start time), <b>Not scheduled yet</b> and <b>Completed</b>.',
